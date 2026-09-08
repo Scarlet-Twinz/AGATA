@@ -28,6 +28,28 @@ class ProjectResponse(ProjectCreate):
     status: str
 
 
+class RequirementCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    description: str | None = None
+
+
+class RequirementResponse(RequirementCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+
+
+class ProjectRequirementCreate(BaseModel):
+    requirement_id: UUID
+
+
+class ProjectRequirementResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    requirement_id: UUID
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class DocumentCreate(BaseModel):
     contractor_id: UUID | None = None
     name: str = Field(min_length=1, max_length=255)
@@ -41,6 +63,15 @@ class DocumentResponse(DocumentCreate):
     id: UUID
     status: str
     created_at: datetime
+
+
+class DocumentRequirementMatchResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    requirement_id: UUID
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReadinessResponse(BaseModel):
