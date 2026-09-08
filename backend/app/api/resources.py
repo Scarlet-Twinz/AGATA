@@ -6,8 +6,29 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.entities import Contractor, Document, Project, User
-from app.schemas.domain import ContractorCreate, ContractorResponse, DocumentCreate, DocumentResponse, ProjectCreate, ProjectResponse, ReadinessResponse
+from app.models.entities import (
+    Contractor,
+    Document,
+    DocumentRequirementMatch,
+    Project,
+    ProjectRequirement,
+    Requirement,
+    User,
+)
+from app.schemas.domain import (
+    ContractorCreate,
+    ContractorResponse,
+    DocumentCreate,
+    DocumentRequirementMatchResponse,
+    DocumentResponse,
+    ProjectCreate,
+    ProjectRequirementCreate,
+    ProjectRequirementResponse,
+    ProjectResponse,
+    ReadinessResponse,
+    RequirementCreate,
+    RequirementResponse,
+)
 from app.services.readiness import calculate_readiness
 
 router = APIRouter(prefix="/api", tags=["resources"])
@@ -48,6 +69,56 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
     return project
 
 
+@router.get("/requirements", response_model=list[RequirementResponse])
+def list_requirements(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.scalars(select(Requirement).where(Requirement.company_id == user.company_id).order_by(Requirement.name.asc())).all()
+
+
+@router.post("/requirements", response_model=RequirementResponse, status_code=201)
+def create_requirement(payload: RequirementCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    requirement = Requirement(company_id=user.company_id, **payload.model_dump())
+    db.add(requirement)
+    db.commit()
+    db.refresh(requirement)
+    return requirement
+
+
+@router.get("/projects/{project_id}/requirements", response_model=list[RequirementResponse])
+def list_project_requirements(project_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    company_record_or_404(db, Project, project_id, user.company_id)
+    statement = (
+        select(Requirement)
+        .join(ProjectRequirement, ProjectRequirement.requirement_id == Requirement.id)
+        .where(ProjectRequirement.project_id == project_id, Requirement.company_id == user.company_id)
+        .order_by(Requirement.name.asc())
+    )
+    return db.scalars(statement).all()
+
+
+@router.post("/projects/{project_id}/requirements", response_model=ProjectRequirementResponse, status_code=201)
+def attach_requirement_to_project(
+    project_id: UUID,
+    payload: ProjectRequirementCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    company_record_or_404(db, Project, project_id, user.company_id)
+    company_record_or_404(db, Requirement, payload.requirement_id, user.company_id)
+    existing = db.scalar(
+        select(ProjectRequirement).where(
+            ProjectRequirement.project_id == project_id,
+            ProjectRequirement.requirement_id == payload.requirement_id,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Requirement is already attached to this project")
+    link = ProjectRequirement(project_id=project_id, requirement_id=payload.requirement_id)
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return link
+
+
 @router.get("/documents", response_model=list[DocumentResponse])
 def list_documents(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return db.scalars(select(Document).where(Document.company_id == user.company_id).order_by(Document.created_at.desc())).all()
@@ -62,6 +133,30 @@ def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user
     db.commit()
     db.refresh(document)
     return document
+
+
+@router.post("/documents/{document_id}/requirements/{requirement_id}", response_model=DocumentRequirementMatchResponse, status_code=201)
+def match_document_to_requirement(
+    document_id: UUID,
+    requirement_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    document = company_record_or_404(db, Document, document_id, user.company_id)
+    company_record_or_404(db, Requirement, requirement_id, user.company_id)
+    existing = db.scalar(
+        select(DocumentRequirementMatch).where(
+            DocumentRequirementMatch.document_id == document_id,
+            DocumentRequirementMatch.requirement_id == requirement_id,
+        )
+    )
+    if existing:
+        return existing
+    match = DocumentRequirementMatch(document_id=document.id, requirement_id=requirement_id)
+    db.add(match)
+    db.commit()
+    db.refresh(match)
+    return match
 
 
 @router.get("/projects/{project_id}/contractors/{contractor_id}/readiness", response_model=ReadinessResponse)
