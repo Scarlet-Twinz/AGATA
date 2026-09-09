@@ -88,7 +88,7 @@
 .agata-activity-empty, .agata-expiration-empty { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #70869f; font-size: 10px; text-align: center; }
 
 .agata-evidence-content { display: grid; grid-template-columns: 150px minmax(0,1fr); align-items: center; gap: 12px; padding: 8px 17px 15px; }
-.agata-evidence-donut { width: 135px; height: 135px; display: grid; place-items: center; margin: 0 auto; border-radius: 50%; }
+.agata-evidence-donut { position: relative; width: 135px; height: 135px; display: grid; place-items: center; margin: 0 auto; border-radius: 50%; }
 .agata-evidence-donut::before { content: ""; position: absolute; width: 99px; height: 99px; border-radius: 50%; background: #081522; }
 .agata-evidence-donut > div { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
 .agata-evidence-donut strong { color: #edf4fb; font-size: 21px; letter-spacing: -.03em; }
