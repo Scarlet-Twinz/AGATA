@@ -1,68 +1,73 @@
-/* Final public-site brand treatment: the compact badge uses the dedicated A-mark asset. */
+/* Final public-site brand treatment: crop the real AGATA logo asset to its original A mark. */
 .public-brand {
-  min-width: 46px;
-  width: 46px;
-  height: 46px;
+  min-width: 52px;
+  width: 52px;
+  height: 52px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 50%;
-  background: rgba(9, 22, 42, 0.9);
-  flex: 0 0 46px;
+  border-radius: 14px;
+  background: rgba(9, 22, 42, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  flex: 0 0 52px;
+  position: relative;
 }
 
 .public-brand .logo-badge {
   width: 100%;
   height: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   overflow: hidden;
-  border-radius: 50%;
+  position: relative;
+  border-radius: inherit;
 }
 
 .public-brand .logo-badge img {
-  position: static !important;
-  width: 34px !important;
-  height: 34px !important;
-  max-width: 34px !important;
-  max-height: 34px !important;
+  position: absolute !important;
+  width: 149px !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
   display: block !important;
-  object-fit: contain !important;
-  object-position: center !important;
+  object-fit: initial !important;
+  object-position: initial !important;
+  left: -54px !important;
+  top: -10px !important;
   transform: none !important;
   border-radius: 0 !important;
 }
 
 .footer-brand {
-  width: 46px;
-  min-width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
 }
 
 .footer-brand .logo-badge img {
-  width: 34px !important;
-  height: 34px !important;
-  max-width: 34px !important;
-  max-height: 34px !important;
+  width: 149px !important;
+  max-width: none !important;
+  left: -54px !important;
+  top: -10px !important;
 }
 
 @media (max-width: 760px) {
   .public-brand,
   .footer-brand {
-    width: 42px;
-    min-width: 42px;
-    height: 42px;
-    flex-basis: 42px;
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    flex-basis: 46px;
+    border-radius: 12px;
   }
 
   .public-brand .logo-badge img,
   .footer-brand .logo-badge img {
-    width: 31px !important;
-    height: 31px !important;
-    max-width: 31px !important;
-    max-height: 31px !important;
+    width: 131px !important;
+    max-width: none !important;
+    left: -47px !important;
+    top: -9px !important;
   }
 }
