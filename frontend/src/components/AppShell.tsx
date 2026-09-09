@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
@@ -15,10 +15,13 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("agata_theme") ?? "dark");
 
+  useEffect(() => {
+    document.documentElement.dataset.appTheme = theme;
+  }, [theme]);
+
   function changeTheme(next: string) {
     setTheme(next);
     localStorage.setItem("agata_theme", next);
-    document.documentElement.dataset.appTheme = next;
   }
 
   function handleSignOut() {
