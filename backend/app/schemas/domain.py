@@ -87,6 +87,7 @@ class DashboardProject(BaseModel):
     id: UUID
     name: str
     contractor_count: int
+    requirement_count: int
     readiness_score: int | None
     readiness_status: str | None
 
