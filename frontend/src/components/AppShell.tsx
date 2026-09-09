@@ -7,7 +7,7 @@ const groups = [
   { label: "Workspace", links: [["Command Center", "/dashboard"], ["Projects", "/projects"], ["Contractors", "/contractors"], ["Requirements", "/requirements"], ["Evidence", "/evidence"], ["Readiness", "/readiness"]] },
   { label: "Intelligence", links: [["Rumi", "/rumi"], ["Insights", "/insights"]] },
   { label: "Business", links: [["Billing & Plan", "/billing"], ["Usage", "/usage"]] },
-  { label: "Admin", links: [["Team", "/team"], ["Notifications", "/notifications"], ["Audit Trail", "/audit"], ["Settings", "/settings"] },
+  { label: "Admin", links: [["Team", "/team"], ["Notifications", "/notifications"], ["Audit Trail", "/audit"], ["Settings", "/settings"]] },
 ] as const;
 
 const symbols: Record<string, string> = { "Command Center": "⌂", Projects: "◈", Contractors: "◎", Requirements: "≡", Evidence: "◇", Readiness: "◉", Rumi: "R", Insights: "✦", "Billing & Plan": "◇", Usage: "▥", Team: "♙", Notifications: "◌", "Audit Trail": "↗", Settings: "⚙" };
