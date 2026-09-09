@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
@@ -7,6 +7,7 @@ type DashboardProject = {
   id: string;
   name: string;
   contractor_count: number;
+  requirement_count: number;
   readiness_score: number | null;
   readiness_status: string | null;
 };
@@ -113,7 +114,7 @@ export function DashboardPage() {
         <article className="dashboard-surface readiness-card">
           <div className="surface-heading"><div><span>READINESS</span><h2>Overall readiness</h2><p>Across evaluated contractor and project checks.</p></div><Link to="/readiness">Open readiness →</Link></div>
           <div className="readiness-visual">
-            <div className="readiness-gauge" style={{ "--readiness": `${readinessScore ?? 0}%` } as React.CSSProperties}><div><strong>{loading ? "—" : readinessScore === null ? "—" : `${readinessScore}%`}</strong><small>{readinessScore === null ? "NO DATA" : "READINESS"}</small></div></div>
+            <div className="readiness-gauge" style={{ "--readiness": `${readinessScore ?? 0}%` } as CSSProperties}><div><strong>{loading ? "—" : readinessScore === null ? "—" : `${readinessScore}%`}</strong><small>{readinessScore === null ? "NO DATA" : "READINESS"}</small></div></div>
             <div className="readiness-breakdown">
               <div><span className="legend-dot ready" /><b>Ready</b><strong>{data.ready_count}</strong>{evaluatedCount > 0 && <small>{Math.round((data.ready_count / evaluatedCount) * 100)}%</small>}</div>
               <div><span className="legend-dot attention" /><b>Attention</b><strong>{data.attention_count}</strong>{evaluatedCount > 0 && <small>{Math.round((data.attention_count / evaluatedCount) * 100)}%</small>}</div>
@@ -144,7 +145,7 @@ export function DashboardPage() {
           <Link className="project-row" to={`/projects/${project.id}`} key={project.id}>
             <span><strong>{project.name}</strong><small>{project.contractor_count} evaluated contractor{project.contractor_count === 1 ? "" : "s"}</small></span>
             <span>{project.contractor_count}</span>
-            <span>—</span>
+            <span>{project.requirement_count}</span>
             <strong>{project.readiness_score !== null ? `${Math.round(project.readiness_score)}%` : "—"}</strong>
             <span className={`status-chip ${statusClass(project.readiness_status)}`}>{statusLabel(project.readiness_status)}</span>
             <b>→</b>
@@ -156,7 +157,7 @@ export function DashboardPage() {
         <article className="dashboard-surface evidence-card">
           <div className="surface-heading"><div><span>EVIDENCE HEALTH</span><h2>Evidence status</h2><p>Coverage against project requirements.</p></div><Link to="/evidence">View all →</Link></div>
           <div className="evidence-status-body">
-            <div className="evidence-donut" style={{ "--coverage": `${coverage}%` } as React.CSSProperties}><div><strong>{coverage}%</strong><small>covered</small></div></div>
+            <div className="evidence-donut" style={{ "--coverage": `${coverage}%` } as CSSProperties}><div><strong>{coverage}%</strong><small>covered</small></div></div>
             <div className="evidence-legend"><div><span className="legend-dot ready" /><b>Mapped</b><strong>{mappedEvidence}</strong></div><div><span className="legend-dot attention" /><b>Expiring</b><strong>{data.expiring_count}</strong></div><div><span className="legend-dot not-ready" /><b>Expired</b><strong>{data.expired_count}</strong></div><div><span className="legend-dot missing" /><b>Unmapped</b><strong>{data.unmapped_count}</strong></div></div>
           </div>
         </article>
