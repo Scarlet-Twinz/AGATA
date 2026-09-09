@@ -92,9 +92,14 @@ export function PublicInfoPage() {
         <div className="founder-note">
           <div>
             <p className="section-kicker">The idea behind AGATA</p>
-            <h2>Make the important answer easier to see.</h2>
+            <h2>Built from a question. Named for a reason.</h2>
           </div>
-          <p>AGATA started from a practical question: <em>Can this contractor satisfy the requirements for this project right now, and what needs attention?</em> Everything in the product is being shaped around making that answer clearer, faster, and more explainable.</p>
+          <div className="founder-story">
+            <p>AGATA carries the name of my mother.</p>
+            <p>She is the person whose strength, love, and sacrifice helped make me who I am. She is one of the deepest reasons behind the person I am becoming and the things I am determined to build.</p>
+            <p>So AGATA is more than a product name. It is a reminder of where the journey began—and of the person who gave me the reason to keep building.</p>
+            <div className="founder-signature"><strong>Anthony Emmanuella Mmasinachi</strong><span>Founder, AGATA</span></div>
+          </div>
         </div>
       )}
       <div className="info-cta">
