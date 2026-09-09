@@ -8,6 +8,7 @@ import "./public-polish.css";
 import "./final-public-fixes.css";
 import "./workspace.css";
 import "./workspace-overrides.css";
+import "./dashboard-final.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
