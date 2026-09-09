@@ -90,6 +90,35 @@ class DashboardProject(BaseModel):
     requirement_count: int
     readiness_score: int | None
     readiness_status: str | None
+    updated_at: datetime | None
+
+
+class DashboardActivity(BaseModel):
+    type: str
+    title: str
+    description: str
+    created_at: datetime
+
+
+class DashboardAttention(BaseModel):
+    kind: str
+    title: str
+    description: str
+    severity: str
+    href: str
+
+
+class DashboardExpiration(BaseModel):
+    id: UUID
+    name: str
+    contractor_name: str | None
+    expires_at: datetime
+    days_remaining: int
+
+
+class DashboardTrendPoint(BaseModel):
+    month: str
+    score: int
 
 
 class DashboardResponse(BaseModel):
@@ -104,8 +133,12 @@ class DashboardResponse(BaseModel):
     not_ready_count: int
     expiring_count: int
     expired_count: int
+    valid_evidence_count: int
     unmapped_count: int
     covered_requirement_count: int
     total_project_requirements: int
     projects: list[DashboardProject]
-    recent_activity: list[str]
+    recent_activity: list[DashboardActivity]
+    attention_items: list[DashboardAttention]
+    upcoming_expirations: list[DashboardExpiration]
+    readiness_trend: list[DashboardTrendPoint]
