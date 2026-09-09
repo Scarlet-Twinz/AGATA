@@ -23,8 +23,8 @@ const content = {
       ["Our mission", "Make evidence-led compliance decisions easier to understand, easier to explain, and easier to act on."],
       ["Our approach", "Start with a dependable rules-based foundation, then use intelligence where it genuinely improves the experience. AI should assist the workflow, not quietly replace its source of truth."],
       ["Our vision", "Build a platform where project teams can see readiness across their work before compliance becomes a last-minute problem."],
-      ["Built deliberately", "AGATA has its own product identity and workflow. We study the problems teams face without copying another platform's interface, language, or implementation."],
-      ["A founder-led product", "AGATA is being built hands-on, with the product shaped around real workflow problems rather than a collection of features added simply because they are fashionable."],
+      ["Focused by design", "AGATA is intentionally focused on a clear readiness workflow, a dependable evidence foundation, and intelligence where it genuinely helps. We learn from the problems teams face and build our own way of solving them."],
+      ["Founder-led product", "AGATA is being built hands-on around a real workflow problem. Every feature should earn its place by making that workflow clearer, more useful, or easier to act on."],
     ],
   },
 };
