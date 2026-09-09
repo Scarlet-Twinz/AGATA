@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { PublicInfoPage } from "./pages/PublicInfoPage";
 import { ContactPage } from "./pages/ContactPage";
+import { LegalPage } from "./pages/LegalPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => (
@@ -20,6 +21,8 @@ export default function App() {
         <Route path="/about" element={<PublicInfoPage />} />
         <Route path="/faq" element={<PublicInfoPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/privacy" element={<LegalPage />} />
+        <Route path="/terms" element={<LegalPage />} />
         <Route path="/support" element={<Navigate to="/contact" replace />} />
         <Route path="/login" element={page("Sign in", "Sign in to your AGATA workspace.")} />
         <Route path="/signup" element={page("Get started", "Create your AGATA workspace.")} />
