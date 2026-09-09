@@ -1,0 +1,48 @@
+/* Final public-site fixes: use the supplied AGATA mark as a compact circular A badge. */
+.public-brand {
+  min-width: 46px;
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.public-brand img {
+  width: 46px !important;
+  height: 46px !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  border-radius: 50%;
+  display: block;
+}
+
+.footer-brand {
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+}
+
+.footer-brand img {
+  width: 46px !important;
+  height: 46px !important;
+}
+
+@media (max-width: 760px) {
+  .public-brand,
+  .footer-brand {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+  }
+
+  .public-brand img,
+  .footer-brand img {
+    width: 42px !important;
+    height: 42px !important;
+  }
+}
