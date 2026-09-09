@@ -1,12 +1,14 @@
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import (
+    ComplianceCheck,
     Contractor,
     Document,
     DocumentRequirementMatch,
@@ -18,6 +20,8 @@ from app.models.entities import (
 from app.schemas.domain import (
     ContractorCreate,
     ContractorResponse,
+    DashboardProject,
+    DashboardResponse,
     DocumentCreate,
     DocumentRequirementMatchResponse,
     DocumentResponse,
@@ -39,6 +43,135 @@ def company_record_or_404(db: Session, model, record_id: UUID, company_id: UUID)
     if not record:
         raise HTTPException(status_code=404, detail="Resource not found")
     return record
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    company_id = user.company_id
+    company_name = db.scalar(select(Company.name).where(Company.id == company_id)) if False else None
+    from app.models.entities import Company
+    company_name = db.scalar(select(Company.name).where(Company.id == company_id)) or "Workspace"
+
+    project_count = db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id)) or 0
+    contractor_count = db.scalar(select(func.count(Contractor.id)).where(Contractor.company_id == company_id)) or 0
+    requirement_count = db.scalar(select(func.count(Requirement.id)).where(Requirement.company_id == company_id)) or 0
+    evidence_count = db.scalar(select(func.count(Document.id)).where(Document.company_id == company_id)) or 0
+
+    latest_check_subquery = (
+        select(
+            ComplianceCheck.project_id.label("project_id"),
+            ComplianceCheck.contractor_id.label("contractor_id"),
+            func.max(ComplianceCheck.checked_at).label("latest_checked_at"),
+        )
+        .where(ComplianceCheck.company_id == company_id)
+        .group_by(ComplianceCheck.project_id, ComplianceCheck.contractor_id)
+        .subquery()
+    )
+    latest_checks = db.scalars(
+        select(ComplianceCheck)
+        .join(
+            latest_check_subquery,
+            (ComplianceCheck.project_id == latest_check_subquery.c.project_id)
+            & (ComplianceCheck.contractor_id == latest_check_subquery.c.contractor_id)
+            & (ComplianceCheck.checked_at == latest_check_subquery.c.latest_checked_at),
+        )
+        .where(ComplianceCheck.company_id == company_id)
+    ).all()
+
+    ready_count = sum(check.status.value == "ready" for check in latest_checks)
+    attention_count = sum(check.status.value == "attention" for check in latest_checks)
+    not_ready_count = sum(check.status.value == "not_ready" for check in latest_checks)
+    readiness_score = round(sum(check.score for check in latest_checks) / len(latest_checks)) if latest_checks else None
+
+    now = datetime.now(timezone.utc)
+    expiring_cutoff = now + timedelta(days=30)
+    expiring_count = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.company_id == company_id,
+            Document.expires_at > now,
+            Document.expires_at <= expiring_cutoff,
+            Document.status == "active",
+        )
+    ) or 0
+    expired_count = db.scalar(
+        select(func.count(Document.id)).where(
+            Document.company_id == company_id,
+            Document.expires_at <= now,
+            Document.status == "active",
+        )
+    ) or 0
+    mapped_document_ids = select(DocumentRequirementMatch.document_id).join(
+        Document, Document.id == DocumentRequirementMatch.document_id
+    ).where(Document.company_id == company_id)
+    mapped_count = db.scalar(select(func.count(func.distinct(DocumentRequirementMatch.document_id))).where(DocumentRequirementMatch.document_id.in_(mapped_document_ids))) or 0
+    unmapped_count = max(evidence_count - mapped_count, 0)
+
+    total_project_requirements = db.scalar(
+        select(func.count(ProjectRequirement.id)).join(Project, Project.id == ProjectRequirement.project_id).where(Project.company_id == company_id)
+    ) or 0
+    covered_requirement_count = db.scalar(
+        select(func.count(func.distinct(ProjectRequirement.id)))
+        .join(Project, Project.id == ProjectRequirement.project_id)
+        .join(DocumentRequirementMatch, DocumentRequirementMatch.requirement_id == ProjectRequirement.requirement_id)
+        .join(Document, Document.id == DocumentRequirementMatch.document_id)
+        .where(Project.company_id == company_id, Document.company_id == company_id, Document.status == "active")
+    ) or 0
+
+    projects = db.scalars(select(Project).where(Project.company_id == company_id).order_by(Project.id.desc())).all()
+    dashboard_projects: list[DashboardProject] = []
+    for project in projects:
+        project_checks = [check for check in latest_checks if check.project_id == project.id]
+        project_score = round(sum(check.score for check in project_checks) / len(project_checks)) if project_checks else None
+        if project_checks:
+            if all(check.status.value == "ready" for check in project_checks):
+                project_status = "ready"
+            elif any(check.status.value == "not_ready" for check in project_checks):
+                project_status = "not_ready"
+            else:
+                project_status = "attention"
+        else:
+            project_status = None
+        dashboard_projects.append(
+            DashboardProject(
+                id=project.id,
+                name=project.name,
+                contractor_count=len({check.contractor_id for check in project_checks}),
+                readiness_score=project_score,
+                readiness_status=project_status,
+            )
+        )
+
+    recent_checks = db.scalars(
+        select(ComplianceCheck).where(ComplianceCheck.company_id == company_id).order_by(ComplianceCheck.checked_at.desc()).limit(3)
+    ).all()
+    recent_documents = db.scalars(
+        select(Document).where(Document.company_id == company_id).order_by(Document.created_at.desc()).limit(3)
+    ).all()
+    activity_events: list[tuple[datetime, str]] = []
+    for check in recent_checks:
+        activity_events.append((check.checked_at, f"Readiness evaluated: {check.status.value.replace('_', ' ')} ({check.score}%)."))
+    for document in recent_documents:
+        activity_events.append((document.created_at, f"Evidence added: {document.name}."))
+    activity_events.sort(key=lambda item: item[0], reverse=True)
+
+    return DashboardResponse(
+        company_name=company_name,
+        project_count=project_count,
+        contractor_count=contractor_count,
+        requirement_count=requirement_count,
+        evidence_count=evidence_count,
+        readiness_score=readiness_score,
+        ready_count=ready_count,
+        attention_count=attention_count,
+        not_ready_count=not_ready_count,
+        expiring_count=expiring_count,
+        expired_count=expired_count,
+        unmapped_count=unmapped_count,
+        covered_requirement_count=covered_requirement_count,
+        total_project_requirements=total_project_requirements,
+        projects=dashboard_projects,
+        recent_activity=[message for _, message in activity_events[:5]],
+    )
 
 
 @router.get("/contractors", response_model=list[ContractorResponse])
