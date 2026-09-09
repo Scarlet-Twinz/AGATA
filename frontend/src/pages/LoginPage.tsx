@@ -22,7 +22,16 @@ export function LoginPage() {
       const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in. Please try again.");
+      let message = "Unable to sign in. Please try again.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message) as { detail?: string };
+          message = parsed.detail ?? err.message;
+        } catch {
+          message = err.message || message;
+        }
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
