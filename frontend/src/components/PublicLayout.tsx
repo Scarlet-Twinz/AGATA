@@ -11,7 +11,7 @@ export function PublicLayout() {
   return (
     <div className="public-site">
       <header className="public-nav">
-        <Link className="public-brand" to="/">
+        <Link className="public-brand" to="/" aria-label="AGATA home">
           <img src="/logo.png" alt="AGATA" />
         </Link>
         <nav className="public-links" aria-label="Main navigation">
@@ -31,9 +31,11 @@ export function PublicLayout() {
         <div>
           <Link className="public-brand footer-brand" to="/"><img src="/logo.png" alt="AGATA" /></Link>
           <p>Compliance intelligence for teams that need to know what is ready, what is missing, and what needs attention.</p>
+          <a className="footer-email" href="mailto:anthony@anthonytech.ng">anthony@anthonytech.ng</a>
+          <a className="footer-phone" href="tel:09031530359">09031530359</a>
         </div>
         <div className="footer-column"><strong>Product</strong><Link to="/how-it-works">How it works</Link><Link to="/faq">FAQ</Link><Link to="/contact">Support</Link></div>
-        <div className="footer-column"><strong>Company</strong><Link to="/about">About</Link><Link to="/contact">Contact</Link></div>
+        <div className="footer-column"><strong>Company</strong><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link></div>
         <div className="footer-column"><strong>Account</strong><Link to="/login">Sign in</Link><Link to="/signup">Get started</Link></div>
         <div className="footer-bottom">© {new Date().getFullYear()} AGATA. Built for evidence-led decisions.</div>
       </footer>
