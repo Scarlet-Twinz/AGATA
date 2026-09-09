@@ -1,23 +1,29 @@
-/* Final public-site fixes: use the supplied AGATA mark as a compact circular A badge. */
+/* Final public-site fixes: keep the supplied rectangular logo as the source asset, but display only its A mark in compact brand badges. */
 .public-brand {
+  position: relative;
   min-width: 46px;
   width: 46px;
   height: 46px;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   overflow: hidden;
   border-radius: 50%;
+  background: rgba(9, 22, 42, 0.9);
 }
 
 .public-brand img {
-  width: 46px !important;
-  height: 46px !important;
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: auto !important;
+  height: 78px !important;
   max-width: none !important;
   max-height: none !important;
-  object-fit: cover !important;
+  transform: translateX(-50%);
+  object-fit: contain !important;
   object-position: center top !important;
-  border-radius: 50%;
+  border-radius: 0;
   display: block;
 }
 
@@ -28,8 +34,8 @@
 }
 
 .footer-brand img {
-  width: 46px !important;
-  height: 46px !important;
+  width: auto !important;
+  height: 78px !important;
 }
 
 @media (max-width: 760px) {
@@ -42,7 +48,6 @@
 
   .public-brand img,
   .footer-brand img {
-    width: 42px !important;
-    height: 42px !important;
+    height: 71px !important;
   }
 }
