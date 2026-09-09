@@ -3,7 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./components/AppShell";
 import { PublicLayout } from "./components/PublicLayout";
-import { DashboardPage } from "./pages/DashboardPage";
+import DashboardPage from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { PublicInfoPage } from "./pages/PublicInfoPage";
 import { ContactPage } from "./pages/ContactPage";
