@@ -1,9 +1,12 @@
-export function PlaceholderPage({ title }: { title: string }) {
+type Props = { title: string; description?: string };
+
+export function PlaceholderPage({ title, description }: Props) {
   return (
-    <section className="page">
-      <p className="eyebrow">AGATA</p>
+    <section className="page workspace-placeholder-page">
+      <p className="eyebrow">AGATA WORKSPACE</p>
       <h1>{title}</h1>
-      <div className="panel empty-state"><strong>{title} workspace</strong><span>This route is reserved for the V1 implementation. The backend domain is being built first so the UI connects to stable APIs rather than mocked data.</span></div>
+      <p className="workspace-placeholder-description">{description ?? `Your ${title.toLowerCase()} workspace.`}</p>
+      <div className="panel empty-state"><strong>{title} workspace</strong><span>This area is mapped into the AGATA workspace and will connect to live data as the core workflow is implemented.</span></div>
     </section>
   );
 }
