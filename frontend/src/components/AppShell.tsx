@@ -2,10 +2,10 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const links = [
   ["Dashboard", "/dashboard"],
-  ["Contractors", "/contractors"],
   ["Projects", "/projects"],
-  ["Documents", "/documents"],
-  ["Alerts", "/alerts"],
+  ["Contractors", "/contractors"],
+  ["Requirements", "/requirements"],
+  ["Evidence", "/evidence"],
   ["Rumi", "/rumi"],
   ["Settings", "/settings"],
 ] as const;
