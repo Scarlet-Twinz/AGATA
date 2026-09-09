@@ -12,7 +12,7 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (companyName: string, fullName: string, email: string, password: string) => Promise<void>;
+  signUp: (companyName: string, fullName: string, email: string, password: string, acceptedTerms: boolean) => Promise<void>;
   signOut: () => void;
 };
 
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(TOKEN_KEY, result.access_token);
       setUser(await loadUser(result.access_token));
     },
-    async signUp(companyName, fullName, email, password) {
+    async signUp(companyName, fullName, email, password, acceptedTerms) {
       const result = await api<{ access_token: string }>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           full_name: fullName,
           email,
           password,
-          accepted_terms: true,
+          accepted_terms: acceptedTerms,
         }),
       });
       localStorage.setItem(TOKEN_KEY, result.access_token);
