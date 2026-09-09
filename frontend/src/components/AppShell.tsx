@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 const links = [
   ["Dashboard", "/dashboard"],
@@ -11,6 +12,14 @@ const links = [
 ] as const;
 
 export function AppShell() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  function handleSignOut() {
+    signOut();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -27,7 +36,10 @@ export function AppShell() {
       <main className="main-content">
         <header className="topbar">
           <div><span className="status-dot" /> System online</div>
-          <div className="topbar-user">Workspace</div>
+          <div className="topbar-account">
+            <div className="topbar-user">{user?.full_name ?? "Workspace"}</div>
+            <button className="topbar-signout" type="button" onClick={handleSignOut}>Sign out</button>
+          </div>
         </header>
         <Outlet />
       </main>
