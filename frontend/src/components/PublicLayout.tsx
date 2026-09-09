@@ -15,7 +15,7 @@ export function PublicLayout() {
     <div className="public-site">
       <header className="public-nav">
         <Link className="public-brand" to="/" aria-label="AGATA home" onClick={() => setMenuOpen(false)}>
-          <img src="/logo.png" alt="AGATA" />
+          <span className="logo-badge"><img src="/logo.png" alt="AGATA" /></span>
         </Link>
         <nav className="public-links" aria-label="Main navigation">
           {links.map(([label, to]) => (
@@ -54,7 +54,7 @@ export function PublicLayout() {
       <main><Outlet /></main>
       <footer className="public-footer">
         <div>
-          <Link className="public-brand footer-brand" to="/"><img src="/logo.png" alt="AGATA" /></Link>
+          <Link className="public-brand footer-brand" to="/"><span className="logo-badge"><img src="/logo.png" alt="AGATA" /></span></Link>
           <p>Compliance intelligence for teams that need to know what is ready, what is missing, and what needs attention.</p>
           <a className="footer-email" href="mailto:anthony@anthonytech.ng">anthony@anthonytech.ng</a>
           <a className="footer-phone" href="tel:09031530359">09031530359</a>
