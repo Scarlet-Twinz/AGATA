@@ -29,10 +29,19 @@ export function SignupPage() {
     }
     setSubmitting(true);
     try {
-      await signUp(companyName.trim(), fullName.trim(), email.trim(), password);
+      await signUp(companyName.trim(), fullName.trim(), email.trim(), password, acceptedTerms);
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create your workspace. Please try again.");
+      let message = "Unable to create your workspace. Please try again.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message) as { detail?: string };
+          message = parsed.detail ?? err.message;
+        } catch {
+          message = err.message || message;
+        }
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -47,12 +56,12 @@ export function SignupPage() {
           <p>Bring your projects, contractors, requirements, and evidence into one readiness workflow.</p>
         </div>
         <form className="auth-form auth-form-grid" onSubmit={handleSubmit}>
-          <label>Company name<input type="text" autoComplete="organization" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Your company" required /></label>
-          <label>Your name<input type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Full name" required /></label>
+          <label>Company name<input type="text" autoComplete="organization" value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Your company" required minLength={2} maxLength={160} /></label>
+          <label>Your name<input type="text" autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Full name" required minLength={2} maxLength={160} /></label>
           <label className="auth-field-full">Work email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required /></label>
           <label>Password<input type="password" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" required /></label>
           <label>Confirm password<input type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat your password" required /></label>
-          <label className="auth-checkbox auth-field-full"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} /><span>I agree to the <Link to="/terms" target="_blank">Terms</Link> and acknowledge the <Link to="/privacy" target="_blank">Privacy Policy</Link>.</span></label>
+          <label className="auth-checkbox auth-field-full"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required /><span>I agree to the <Link to="/terms" target="_blank">Terms</Link> and acknowledge the <Link to="/privacy" target="_blank">Privacy Policy</Link>.</span></label>
           {error && <div className="auth-error auth-field-full" role="alert">{error}</div>}
           <button className="primary-button auth-submit auth-field-full" type="submit" disabled={submitting}>{submitting ? "Creating workspace…" : "Create workspace"}<span>→</span></button>
         </form>
