@@ -81,3 +81,30 @@ class ReadinessResponse(BaseModel):
     status: str
     explanation: str
     missing_requirements: list[str]
+
+
+class DashboardProject(BaseModel):
+    id: UUID
+    name: str
+    contractor_count: int
+    readiness_score: int | None
+    readiness_status: str | None
+
+
+class DashboardResponse(BaseModel):
+    company_name: str
+    project_count: int
+    contractor_count: int
+    requirement_count: int
+    evidence_count: int
+    readiness_score: int | None
+    ready_count: int
+    attention_count: int
+    not_ready_count: int
+    expiring_count: int
+    expired_count: int
+    unmapped_count: int
+    covered_requirement_count: int
+    total_project_requirements: int
+    projects: list[DashboardProject]
+    recent_activity: list[str]
