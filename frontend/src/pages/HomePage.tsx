@@ -46,7 +46,28 @@ export function HomePage() {
 
       <section className="statement-section"><p className="section-kicker">The problem</p><h2>Compliance shouldn't feel like detective work.</h2><p>When requirements live in spreadsheets, certificates live in inboxes, and contractor status lives in someone's memory, every decision takes longer than it should.</p></section>
 
+      <section className="human-story-section">
+        <div className="human-story-image">
+          <img src="https://images.unsplash.com/photo-1603201667230-bd139210db18?auto=format&fit=crop&fm=jpg&q=85&w=1600" alt="A team collaborating around a laptop in a modern office" loading="lazy" />
+          <div className="image-caption"><span>THE WORKFLOW</span><strong>People, projects, and evidence moving together.</strong></div>
+        </div>
+        <div className="human-story-copy">
+          <p className="section-kicker">Built for real teams</p>
+          <h2>Compliance decisions happen around people—not spreadsheets.</h2>
+          <p>AGATA is designed for the teams who have to ask the practical question: can this contractor satisfy what this project requires right now?</p>
+          <div className="human-story-points"><span>01 <b>See the requirement</b></span><span>02 <b>See the evidence</b></span><span>03 <b>See the decision</b></span></div>
+        </div>
+      </section>
+
       <section className="steps-section"><div className="section-heading"><div><p className="section-kicker">How AGATA works</p><h2>From requirements to a decision.</h2></div><p>One connected workflow. One clear answer.</p></div><div className="steps-grid">{steps.map(([number,title,description]) => <article className="step-card" key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}</div></section>
+
+      <section className="device-section">
+        <div className="device-copy"><p className="section-kicker">The product, wherever work happens</p><h2>One readiness picture across the workspace.</h2><p>AGATA is designed around the decision first. The same project, evidence, and readiness story should remain understandable whether your team is reviewing it on a large screen or checking it quickly from a phone.</p><Link className="secondary-button" to="/how-it-works">Explore the workflow <span>→</span></Link></div>
+        <div className="device-stage" aria-label="AGATA desktop and mobile product previews">
+          <div className="device-laptop"><div className="device-screen"><div className="device-topline"><span>AGATA</span><b>Project readiness</b><em>READY</em></div><div className="device-score"><strong>100%</strong><span>All required evidence is valid</span></div><div className="device-lines"><i /><i /><i /><i /></div></div><div className="device-base" /></div>
+          <div className="device-phone"><div className="phone-speaker" /><div className="phone-screen"><small>AGATA</small><b>READY</b><strong>100%</strong><span>Infrastructure Upgrade</span><div /><div /><div /></div></div>
+        </div>
+      </section>
 
       <section className="features-section"><div className="section-heading"><div><p className="section-kicker">Inside AGATA</p><h2>Everything points back to readiness.</h2></div><p>Purpose-built intelligence instead of another pile of admin screens.</p></div><div className="features-grid">{features.map(([title,description]) => <article className="feature-card" key={title}><div className="feature-icon">✦</div><h3>{title}</h3><p>{description}</p></article>)}</div></section>
 
