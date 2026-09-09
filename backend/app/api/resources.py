@@ -9,6 +9,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import (
     ComplianceCheck,
+    Company,
     Contractor,
     Document,
     DocumentRequirementMatch,
@@ -48,8 +49,6 @@ def company_record_or_404(db: Session, model, record_id: UUID, company_id: UUID)
 @router.get("/dashboard", response_model=DashboardResponse)
 def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     company_id = user.company_id
-    company_name = db.scalar(select(Company.name).where(Company.id == company_id)) if False else None
-    from app.models.entities import Company
     company_name = db.scalar(select(Company.name).where(Company.id == company_id)) or "Workspace"
 
     project_count = db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id)) or 0
@@ -100,14 +99,18 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
             Document.status == "active",
         )
     ) or 0
-    mapped_document_ids = select(DocumentRequirementMatch.document_id).join(
-        Document, Document.id == DocumentRequirementMatch.document_id
-    ).where(Document.company_id == company_id)
-    mapped_count = db.scalar(select(func.count(func.distinct(DocumentRequirementMatch.document_id))).where(DocumentRequirementMatch.document_id.in_(mapped_document_ids))) or 0
+
+    mapped_count = db.scalar(
+        select(func.count(func.distinct(DocumentRequirementMatch.document_id)))
+        .join(Document, Document.id == DocumentRequirementMatch.document_id)
+        .where(Document.company_id == company_id)
+    ) or 0
     unmapped_count = max(evidence_count - mapped_count, 0)
 
     total_project_requirements = db.scalar(
-        select(func.count(ProjectRequirement.id)).join(Project, Project.id == ProjectRequirement.project_id).where(Project.company_id == company_id)
+        select(func.count(ProjectRequirement.id))
+        .join(Project, Project.id == ProjectRequirement.project_id)
+        .where(Project.company_id == company_id)
     ) or 0
     covered_requirement_count = db.scalar(
         select(func.count(func.distinct(ProjectRequirement.id)))
@@ -116,6 +119,15 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         .join(Document, Document.id == DocumentRequirementMatch.document_id)
         .where(Project.company_id == company_id, Document.company_id == company_id, Document.status == "active")
     ) or 0
+
+    project_requirement_counts = dict(
+        db.execute(
+            select(ProjectRequirement.project_id, func.count(ProjectRequirement.id))
+            .join(Project, Project.id == ProjectRequirement.project_id)
+            .where(Project.company_id == company_id)
+            .group_by(ProjectRequirement.project_id)
+        ).all()
+    )
 
     projects = db.scalars(select(Project).where(Project.company_id == company_id).order_by(Project.id.desc())).all()
     dashboard_projects: list[DashboardProject] = []
@@ -136,6 +148,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
                 id=project.id,
                 name=project.name,
                 contractor_count=len({check.contractor_id for check in project_checks}),
+                requirement_count=int(project_requirement_counts.get(project.id, 0)),
                 readiness_score=project_score,
                 readiness_status=project_status,
             )
