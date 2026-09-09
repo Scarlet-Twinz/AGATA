@@ -12,9 +12,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
-const page = (title: string, description?: string) => (
-  <PlaceholderPage title={title} description={description} />
-);
+const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
 
 export default function App() {
   return (
@@ -32,24 +30,29 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
         </Route>
-
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/projects" element={page("Projects", "Manage projects and their compliance requirements.")} />
+            <Route path="/projects" element={page("Projects", "Create projects, define requirements, and see contractor readiness.")} />
             <Route path="/projects/:projectId" element={page("Project overview", "Project requirements, contractors, evidence, and readiness.")} />
             <Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} />
-            <Route path="/contractors" element={page("Contractors", "Manage contractors and their evidence profiles.")} />
-            <Route path="/contractors/:contractorId" element={page("Contractor profile", "View contractor evidence, projects, and readiness.")} />
-            <Route path="/requirements" element={page("Requirements", "Manage your reusable compliance requirement library.")} />
-            <Route path="/evidence" element={page("Evidence", "Manage evidence and connect it to requirements.")} />
+            <Route path="/contractors" element={page("Contractors", "Manage contractor profiles and their evidence.")} />
+            <Route path="/contractors/:contractorId" element={page("Contractor profile", "View evidence, projects, and readiness.")} />
+            <Route path="/requirements" element={page("Requirements", "Build and reuse your compliance requirement library.")} />
+            <Route path="/evidence" element={page("Evidence", "Store, map, and review evidence against requirements.")} />
+            <Route path="/readiness" element={page("Readiness", "See readiness decisions across your workspace.")} />
             <Route path="/rumi" element={page("Rumi", "Ask questions about your compliance workspace and readiness decisions.")} />
-            <Route path="/settings" element={page("Settings", "Manage your company, profile, and security settings.")} />
+            <Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} />
+            <Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} />
+            <Route path="/usage" element={page("Usage", "Monitor workspace usage against your current plan.")} />
+            <Route path="/team" element={page("Team", "Invite teammates and manage workspace access.")} />
+            <Route path="/notifications" element={page("Notifications", "Review operational items that need your attention.")} />
+            <Route path="/audit" element={page("Audit Trail", "Track important changes and decisions across the workspace.")} />
+            <Route path="/settings" element={page("Settings", "Manage your company, profile, security, and workspace preferences.")} />
             <Route path="/documents" element={<Navigate to="/evidence" replace />} />
-            <Route path="/alerts" element={page("Alerts", "Review items that need attention.")} />
+            <Route path="/alerts" element={<Navigate to="/notifications" replace />} />
           </Route>
         </Route>
-
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
