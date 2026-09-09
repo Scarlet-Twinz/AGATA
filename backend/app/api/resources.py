@@ -21,8 +21,12 @@ from app.models.entities import (
 from app.schemas.domain import (
     ContractorCreate,
     ContractorResponse,
+    DashboardActivity,
+    DashboardAttention,
+    DashboardExpiration,
     DashboardProject,
     DashboardResponse,
+    DashboardTrendPoint,
     DocumentCreate,
     DocumentRequirementMatchResponse,
     DocumentResponse,
@@ -40,21 +44,61 @@ router = APIRouter(prefix="/api", tags=["resources"])
 
 
 def company_record_or_404(db: Session, model, record_id: UUID, company_id: UUID):
-    record = db.scalar(select(model).where(model.id == record_id, model.company_id == company_id))
+    record = db.scalar(
+        select(model).where(model.id == record_id, model.company_id == company_id)
+    )
     if not record:
         raise HTTPException(status_code=404, detail="Resource not found")
     return record
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
-def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    company_id = user.company_id
-    company_name = db.scalar(select(Company.name).where(Company.id == company_id)) or "Workspace"
+def _month_key(value: datetime) -> str:
+    return value.strftime("%Y-%m")
 
-    project_count = db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id)) or 0
-    contractor_count = db.scalar(select(func.count(Contractor.id)).where(Contractor.company_id == company_id)) or 0
-    requirement_count = db.scalar(select(func.count(Requirement.id)).where(Requirement.company_id == company_id)) or 0
-    evidence_count = db.scalar(select(func.count(Document.id)).where(Document.company_id == company_id)) or 0
+
+def _month_label(value: datetime) -> str:
+    return value.strftime("%b")
+
+
+def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    index = year * 12 + (month - 1) + delta
+    return index // 12, index % 12 + 1
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+def dashboard(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    company_id = user.company_id
+    company_name = (
+        db.scalar(select(Company.name).where(Company.id == company_id)) or "Workspace"
+    )
+
+    project_count = (
+        db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id))
+        or 0
+    )
+    contractor_count = (
+        db.scalar(
+            select(func.count(Contractor.id)).where(
+                Contractor.company_id == company_id
+            )
+        )
+        or 0
+    )
+    requirement_count = (
+        db.scalar(
+            select(func.count(Requirement.id)).where(
+                Requirement.company_id == company_id
+            )
+        )
+        or 0
+    )
+    evidence_count = (
+        db.scalar(select(func.count(Document.id)).where(Document.company_id == company_id))
+        or 0
+    )
 
     latest_check_subquery = (
         select(
@@ -66,6 +110,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         .group_by(ComplianceCheck.project_id, ComplianceCheck.contractor_id)
         .subquery()
     )
+
     latest_checks = db.scalars(
         select(ComplianceCheck)
         .join(
@@ -80,45 +125,74 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
     ready_count = sum(check.status.value == "ready" for check in latest_checks)
     attention_count = sum(check.status.value == "attention" for check in latest_checks)
     not_ready_count = sum(check.status.value == "not_ready" for check in latest_checks)
-    readiness_score = round(sum(check.score for check in latest_checks) / len(latest_checks)) if latest_checks else None
+    readiness_score = (
+        round(sum(check.score for check in latest_checks) / len(latest_checks))
+        if latest_checks
+        else None
+    )
 
     now = datetime.now(timezone.utc)
     expiring_cutoff = now + timedelta(days=30)
-    expiring_count = db.scalar(
-        select(func.count(Document.id)).where(
-            Document.company_id == company_id,
-            Document.expires_at > now,
-            Document.expires_at <= expiring_cutoff,
-            Document.status == "active",
-        )
-    ) or 0
-    expired_count = db.scalar(
-        select(func.count(Document.id)).where(
-            Document.company_id == company_id,
-            Document.expires_at <= now,
-            Document.status == "active",
-        )
-    ) or 0
 
-    mapped_count = db.scalar(
-        select(func.count(func.distinct(DocumentRequirementMatch.document_id)))
-        .join(Document, Document.id == DocumentRequirementMatch.document_id)
-        .where(Document.company_id == company_id)
-    ) or 0
-    unmapped_count = max(evidence_count - mapped_count, 0)
+    active_documents = db.scalars(
+        select(Document)
+        .where(Document.company_id == company_id, Document.status == "active")
+        .order_by(Document.expires_at.asc().nullslast(), Document.created_at.desc())
+    ).all()
 
-    total_project_requirements = db.scalar(
-        select(func.count(ProjectRequirement.id))
-        .join(Project, Project.id == ProjectRequirement.project_id)
-        .where(Project.company_id == company_id)
-    ) or 0
-    covered_requirement_count = db.scalar(
-        select(func.count(func.distinct(ProjectRequirement.id)))
-        .join(Project, Project.id == ProjectRequirement.project_id)
-        .join(DocumentRequirementMatch, DocumentRequirementMatch.requirement_id == ProjectRequirement.requirement_id)
-        .join(Document, Document.id == DocumentRequirementMatch.document_id)
-        .where(Project.company_id == company_id, Document.company_id == company_id, Document.status == "active")
-    ) or 0
+    expiring_documents = [
+        document
+        for document in active_documents
+        if document.expires_at is not None
+        and now < document.expires_at <= expiring_cutoff
+    ]
+    expired_documents = [
+        document
+        for document in active_documents
+        if document.expires_at is not None and document.expires_at <= now
+    ]
+
+    expiring_count = len(expiring_documents)
+    expired_count = len(expired_documents)
+    valid_evidence_count = max(evidence_count - expiring_count - expired_count, 0)
+
+    mapped_document_ids = set(
+        db.scalars(
+            select(DocumentRequirementMatch.document_id)
+            .join(Document, Document.id == DocumentRequirementMatch.document_id)
+            .where(Document.company_id == company_id)
+            .distinct()
+        ).all()
+    )
+    unmapped_count = max(evidence_count - len(mapped_document_ids), 0)
+
+    total_project_requirements = (
+        db.scalar(
+            select(func.count(ProjectRequirement.id))
+            .join(Project, Project.id == ProjectRequirement.project_id)
+            .where(Project.company_id == company_id)
+        )
+        or 0
+    )
+
+    covered_requirement_count = (
+        db.scalar(
+            select(func.count(func.distinct(ProjectRequirement.id)))
+            .join(Project, Project.id == ProjectRequirement.project_id)
+            .join(
+                DocumentRequirementMatch,
+                DocumentRequirementMatch.requirement_id
+                == ProjectRequirement.requirement_id,
+            )
+            .join(Document, Document.id == DocumentRequirementMatch.document_id)
+            .where(
+                Project.company_id == company_id,
+                Document.company_id == company_id,
+                Document.status == "active",
+            )
+        )
+        or 0
+    )
 
     project_requirement_counts = dict(
         db.execute(
@@ -129,11 +203,23 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         ).all()
     )
 
-    projects = db.scalars(select(Project).where(Project.company_id == company_id).order_by(Project.id.desc())).all()
+    projects = db.scalars(
+        select(Project)
+        .where(Project.company_id == company_id)
+        .order_by(Project.id.desc())
+    ).all()
+
     dashboard_projects: list[DashboardProject] = []
     for project in projects:
-        project_checks = [check for check in latest_checks if check.project_id == project.id]
-        project_score = round(sum(check.score for check in project_checks) / len(project_checks)) if project_checks else None
+        project_checks = [
+            check for check in latest_checks if check.project_id == project.id
+        ]
+        project_score = (
+            round(sum(check.score for check in project_checks) / len(project_checks))
+            if project_checks
+            else None
+        )
+
         if project_checks:
             if all(check.status.value == "ready" for check in project_checks):
                 project_status = "ready"
@@ -143,6 +229,12 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
                 project_status = "attention"
         else:
             project_status = None
+
+        latest_project_check = max(
+            (check.checked_at for check in project_checks),
+            default=None,
+        )
+
         dashboard_projects.append(
             DashboardProject(
                 id=project.id,
@@ -151,21 +243,175 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
                 requirement_count=int(project_requirement_counts.get(project.id, 0)),
                 readiness_score=project_score,
                 readiness_status=project_status,
+                updated_at=latest_project_check,
             )
         )
 
+    # Build real six-month history from recorded readiness checks.
+    month_starts: list[datetime] = []
+    current_month = now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    for delta in range(-5, 1):
+        year, month = _shift_month(
+            current_month.year,
+            current_month.month,
+            delta,
+        )
+        month_starts.append(current_month.replace(year=year, month=month))
+
+    trend_checks = db.scalars(
+        select(ComplianceCheck)
+        .where(
+            ComplianceCheck.company_id == company_id,
+            ComplianceCheck.checked_at >= month_starts[0],
+        )
+        .order_by(ComplianceCheck.checked_at.asc())
+    ).all()
+
+    trend_buckets: dict[str, list[int]] = {}
+    for check in trend_checks:
+        trend_buckets.setdefault(_month_key(check.checked_at), []).append(check.score)
+
+    readiness_trend = [
+        DashboardTrendPoint(
+            month=_month_label(month),
+            score=round(
+                sum(trend_buckets[_month_key(month)])
+                / len(trend_buckets[_month_key(month)])
+            ),
+        )
+        for month in month_starts
+        if _month_key(month) in trend_buckets
+    ]
+
+    all_contractors = db.scalars(
+        select(Contractor).where(Contractor.company_id == company_id)
+    ).all()
+    project_names = {project.id: project.name for project in projects}
+    contractor_names = {contractor.id: contractor.name for contractor in all_contractors}
+
     recent_checks = db.scalars(
-        select(ComplianceCheck).where(ComplianceCheck.company_id == company_id).order_by(ComplianceCheck.checked_at.desc()).limit(3)
+        select(ComplianceCheck)
+        .where(ComplianceCheck.company_id == company_id)
+        .order_by(ComplianceCheck.checked_at.desc())
+        .limit(5)
     ).all()
     recent_documents = db.scalars(
-        select(Document).where(Document.company_id == company_id).order_by(Document.created_at.desc()).limit(3)
+        select(Document)
+        .where(Document.company_id == company_id)
+        .order_by(Document.created_at.desc())
+        .limit(5)
     ).all()
-    activity_events: list[tuple[datetime, str]] = []
+
+    activity_events: list[DashboardActivity] = []
     for check in recent_checks:
-        activity_events.append((check.checked_at, f"Readiness evaluated: {check.status.value.replace('_', ' ')} ({check.score}%)."))
+        activity_events.append(
+            DashboardActivity(
+                type="readiness",
+                title="Readiness recalculated",
+                description=(
+                    f"{project_names.get(check.project_id, 'Project')} · "
+                    f"{contractor_names.get(check.contractor_id, 'Contractor')} · "
+                    f"{check.score}% {check.status.value.replace('_', ' ')}"
+                ),
+                created_at=check.checked_at,
+            )
+        )
+
     for document in recent_documents:
-        activity_events.append((document.created_at, f"Evidence added: {document.name}."))
-    activity_events.sort(key=lambda item: item[0], reverse=True)
+        activity_events.append(
+            DashboardActivity(
+                type="document",
+                title="Evidence uploaded",
+                description=document.name,
+                created_at=document.created_at,
+            )
+        )
+
+    activity_events.sort(key=lambda item: item.created_at, reverse=True)
+
+    attention_items: list[DashboardAttention] = []
+    if not_ready_count:
+        attention_items.append(
+            DashboardAttention(
+                kind="readiness",
+                title=(
+                    f"{not_ready_count} contractor"
+                    f"{'' if not_ready_count == 1 else 's'} not ready"
+                ),
+                description="Review readiness checks",
+                severity="high",
+                href="/readiness",
+            )
+        )
+
+    if attention_count:
+        attention_items.append(
+            DashboardAttention(
+                kind="readiness",
+                title=(
+                    f"{attention_count} readiness check"
+                    f"{'' if attention_count == 1 else 's'} need review"
+                ),
+                description="Resolve flagged compliance checks",
+                severity="medium",
+                href="/readiness",
+            )
+        )
+
+    if expiring_count:
+        attention_items.append(
+            DashboardAttention(
+                kind="expiration",
+                title=(
+                    f"{expiring_count} evidence item"
+                    f"{'' if expiring_count == 1 else 's'} expiring"
+                ),
+                description="Review upcoming expirations",
+                severity="medium",
+                href="/evidence",
+            )
+        )
+
+    if expired_count:
+        attention_items.append(
+            DashboardAttention(
+                kind="expiration",
+                title=(
+                    f"{expired_count} evidence item"
+                    f"{'' if expired_count == 1 else 's'} expired"
+                ),
+                description="Renew or replace expired evidence",
+                severity="high",
+                href="/evidence",
+            )
+        )
+
+    if unmapped_count:
+        attention_items.append(
+            DashboardAttention(
+                kind="unmapped",
+                title=(
+                    f"{unmapped_count} evidence item"
+                    f"{'' if unmapped_count == 1 else 's'} unmapped"
+                ),
+                description="Connect evidence to requirements",
+                severity="low",
+                href="/evidence",
+            )
+        )
+
+    upcoming_expirations = [
+        DashboardExpiration(
+            id=document.id,
+            name=document.name,
+            contractor_name=contractor_names.get(document.contractor_id),
+            expires_at=document.expires_at,
+            days_remaining=max(0, (document.expires_at - now).days),
+        )
+        for document in expiring_documents[:4]
+    ]
 
     return DashboardResponse(
         company_name=company_name,
@@ -179,21 +425,36 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_us
         not_ready_count=not_ready_count,
         expiring_count=expiring_count,
         expired_count=expired_count,
+        valid_evidence_count=valid_evidence_count,
         unmapped_count=unmapped_count,
         covered_requirement_count=covered_requirement_count,
         total_project_requirements=total_project_requirements,
         projects=dashboard_projects,
-        recent_activity=[message for _, message in activity_events[:5]],
+        recent_activity=activity_events[:5],
+        attention_items=attention_items[:5],
+        upcoming_expirations=upcoming_expirations,
+        readiness_trend=readiness_trend,
     )
 
 
 @router.get("/contractors", response_model=list[ContractorResponse])
-def list_contractors(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(select(Contractor).where(Contractor.company_id == user.company_id).order_by(Contractor.created_at.desc())).all()
+def list_contractors(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.scalars(
+        select(Contractor)
+        .where(Contractor.company_id == user.company_id)
+        .order_by(Contractor.created_at.desc())
+    ).all()
 
 
 @router.post("/contractors", response_model=ContractorResponse, status_code=201)
-def create_contractor(payload: ContractorCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_contractor(
+    payload: ContractorCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     contractor = Contractor(company_id=user.company_id, **payload.model_dump())
     db.add(contractor)
     db.commit()
@@ -202,12 +463,23 @@ def create_contractor(payload: ContractorCreate, db: Session = Depends(get_db), 
 
 
 @router.get("/projects", response_model=list[ProjectResponse])
-def list_projects(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(select(Project).where(Project.company_id == user.company_id).order_by(Project.id.desc())).all()
+def list_projects(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.scalars(
+        select(Project)
+        .where(Project.company_id == user.company_id)
+        .order_by(Project.id.desc())
+    ).all()
 
 
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     project = Project(company_id=user.company_id, **payload.model_dump())
     db.add(project)
     db.commit()
@@ -216,12 +488,23 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
 
 
 @router.get("/requirements", response_model=list[RequirementResponse])
-def list_requirements(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(select(Requirement).where(Requirement.company_id == user.company_id).order_by(Requirement.name.asc())).all()
+def list_requirements(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.scalars(
+        select(Requirement)
+        .where(Requirement.company_id == user.company_id)
+        .order_by(Requirement.name.asc())
+    ).all()
 
 
 @router.post("/requirements", response_model=RequirementResponse, status_code=201)
-def create_requirement(payload: RequirementCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_requirement(
+    payload: RequirementCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     requirement = Requirement(company_id=user.company_id, **payload.model_dump())
     db.add(requirement)
     db.commit()
@@ -229,19 +512,33 @@ def create_requirement(payload: RequirementCreate, db: Session = Depends(get_db)
     return requirement
 
 
-@router.get("/projects/{project_id}/requirements", response_model=list[RequirementResponse])
-def list_project_requirements(project_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+@router.get(
+    "/projects/{project_id}/requirements",
+    response_model=list[RequirementResponse],
+)
+def list_project_requirements(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     company_record_or_404(db, Project, project_id, user.company_id)
     statement = (
         select(Requirement)
         .join(ProjectRequirement, ProjectRequirement.requirement_id == Requirement.id)
-        .where(ProjectRequirement.project_id == project_id, Requirement.company_id == user.company_id)
+        .where(
+            ProjectRequirement.project_id == project_id,
+            Requirement.company_id == user.company_id,
+        )
         .order_by(Requirement.name.asc())
     )
     return db.scalars(statement).all()
 
 
-@router.post("/projects/{project_id}/requirements", response_model=ProjectRequirementResponse, status_code=201)
+@router.post(
+    "/projects/{project_id}/requirements",
+    response_model=ProjectRequirementResponse,
+    status_code=201,
+)
 def attach_requirement_to_project(
     project_id: UUID,
     payload: ProjectRequirementCreate,
@@ -257,8 +554,14 @@ def attach_requirement_to_project(
         )
     )
     if existing:
-        raise HTTPException(status_code=409, detail="Requirement is already attached to this project")
-    link = ProjectRequirement(project_id=project_id, requirement_id=payload.requirement_id)
+        raise HTTPException(
+            status_code=409,
+            detail="Requirement is already attached to this project",
+        )
+    link = ProjectRequirement(
+        project_id=project_id,
+        requirement_id=payload.requirement_id,
+    )
     db.add(link)
     db.commit()
     db.refresh(link)
@@ -266,12 +569,23 @@ def attach_requirement_to_project(
 
 
 @router.get("/documents", response_model=list[DocumentResponse])
-def list_documents(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.scalars(select(Document).where(Document.company_id == user.company_id).order_by(Document.created_at.desc())).all()
+def list_documents(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.scalars(
+        select(Document)
+        .where(Document.company_id == user.company_id)
+        .order_by(Document.created_at.desc())
+    ).all()
 
 
 @router.post("/documents", response_model=DocumentResponse, status_code=201)
-def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_document(
+    payload: DocumentCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     if payload.contractor_id:
         company_record_or_404(db, Contractor, payload.contractor_id, user.company_id)
     document = Document(company_id=user.company_id, **payload.model_dump())
@@ -281,7 +595,11 @@ def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user
     return document
 
 
-@router.post("/documents/{document_id}/requirements/{requirement_id}", response_model=DocumentRequirementMatchResponse, status_code=201)
+@router.post(
+    "/documents/{document_id}/requirements/{requirement_id}",
+    response_model=DocumentRequirementMatchResponse,
+    status_code=201,
+)
 def match_document_to_requirement(
     document_id: UUID,
     requirement_id: UUID,
@@ -298,15 +616,26 @@ def match_document_to_requirement(
     )
     if existing:
         return existing
-    match = DocumentRequirementMatch(document_id=document.id, requirement_id=requirement_id)
+    match = DocumentRequirementMatch(
+        document_id=document.id,
+        requirement_id=requirement_id,
+    )
     db.add(match)
     db.commit()
     db.refresh(match)
     return match
 
 
-@router.get("/projects/{project_id}/contractors/{contractor_id}/readiness", response_model=ReadinessResponse)
-def readiness(project_id: UUID, contractor_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+@router.get(
+    "/projects/{project_id}/contractors/{contractor_id}/readiness",
+    response_model=ReadinessResponse,
+)
+def readiness(
+    project_id: UUID,
+    contractor_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     company_record_or_404(db, Project, project_id, user.company_id)
     company_record_or_404(db, Contractor, contractor_id, user.company_id)
     return calculate_readiness(db, user.company_id, project_id, contractor_id)
