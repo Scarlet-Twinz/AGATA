@@ -10,6 +10,7 @@ const page = (title: string, description?: string) => (
 export default function App() {
   return (
     <Routes>
+      {/* Public website routes will replace this temporary root later. */}
       <Route element={<AppShell />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
