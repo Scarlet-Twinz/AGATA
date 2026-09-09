@@ -50,11 +50,8 @@ export function AppShell() {
     navigate("/login", { replace: true });
   }
 
-  const current = groups
-    .flatMap((group) => group.links)
-    .concat(adminLinks)
-    .find(([, to]) => location.pathname === to)?.[0] ?? "Command Center";
-
+  const allLinks = [...groups.flatMap((group) => group.links), ...adminLinks];
+  const current = allLinks.find(([, to]) => location.pathname === to)?.[0] ?? "Command Center";
   const firstName = user?.full_name?.split(" ")[0] ?? "there";
 
   return (
@@ -131,7 +128,7 @@ export function AppShell() {
               <input aria-label="Search workspace" placeholder="Search projects, contractors, evidence..." />
               <kbd>/</kbd>
             </label>
-            <button className="notification-button" type="button" onClick={() => navigate("/notifications")} aria-label="Notifications">◌<span className="notification-dot">3</span></button>
+            <button className="notification-button" type="button" onClick={() => navigate("/notifications")} aria-label="Notifications">◌</button>
             <button className="theme-switch" type="button" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-label="Toggle workspace theme">
               <span>{theme === "dark" ? "☼" : "◐"}</span>
               <small>{theme === "dark" ? "Dark" : "Light"}</small>
