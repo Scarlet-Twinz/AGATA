@@ -89,18 +89,30 @@ export function PublicInfoPage() {
         ))}
       </div>
       {location.pathname === "/about" && (
-        <div className="founder-note">
-          <div>
-            <p className="section-kicker">The idea behind AGATA</p>
-            <h2>Built from a question. Named for a reason.</h2>
+        <>
+          <div className="founder-feature">
+            <div className="founder-portrait" aria-label="Founder portrait placeholder">
+              <img src="/founder.jpg" alt="Anthony Emmanuella Mmasinachi, Founder of AGATA" onError={(event) => { event.currentTarget.style.display = "none"; }} />
+              <div className="founder-initials">AEM</div>
+              <span>Founder</span>
+            </div>
+            <div className="founder-feature-copy">
+              <p className="section-kicker">The person behind AGATA</p>
+              <h2>Built from a question. Named for a reason.</h2>
+              <p>AGATA carries the name of my mother.</p>
+              <p>She is the person whose strength, love, and sacrifice helped make me who I am. She is one of the deepest reasons behind the person I am becoming and the things I am determined to build.</p>
+              <p>So AGATA is more than a product name. It is a reminder of where the journey began—and of the person who gave me the reason to keep building.</p>
+              <div className="founder-signature"><strong>Anthony Emmanuella Mmasinachi</strong><span>Founder, AGATA</span></div>
+            </div>
           </div>
-          <div className="founder-story">
-            <p>AGATA carries the name of my mother.</p>
-            <p>She is the person whose strength, love, and sacrifice helped make me who I am. She is one of the deepest reasons behind the person I am becoming and the things I am determined to build.</p>
-            <p>So AGATA is more than a product name. It is a reminder of where the journey began—and of the person who gave me the reason to keep building.</p>
-            <div className="founder-signature"><strong>Anthony Emmanuella Mmasinachi</strong><span>Founder, AGATA</span></div>
+          <div className="founder-note">
+            <div>
+              <p className="section-kicker">The idea behind the product</p>
+              <h2>Make the important answer easier to see.</h2>
+            </div>
+            <p>AGATA started from a practical question: <em>Can this contractor satisfy the requirements for this project right now, and what needs attention?</em> Everything in the product is being shaped around making that answer clearer, faster, and more explainable.</p>
           </div>
-        </div>
+        </>
       )}
       <div className="info-cta">
         <h2>See AGATA in action.</h2>
