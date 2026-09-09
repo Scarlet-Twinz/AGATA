@@ -91,7 +91,7 @@ export function PublicInfoPage() {
       {location.pathname === "/about" && (
         <>
           <div className="founder-feature">
-            <div className="founder-portrait" aria-label="Founder portrait placeholder">
+            <div className="founder-portrait" aria-label="Founder portrait">
               <img src="/founder.jpg" alt="Anthony Emmanuella Mmasinachi, Founder of AGATA" onError={(event) => { event.currentTarget.style.display = "none"; }} />
               <div className="founder-initials">AEM</div>
               <span>Founder</span>
