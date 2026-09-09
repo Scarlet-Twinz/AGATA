@@ -13,6 +13,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    if not payload.accepted_terms:
+        raise HTTPException(status_code=400, detail="You must agree to the Terms and Privacy Policy before creating an account")
+
     existing = db.scalar(select(User).where(User.email == payload.email.lower()))
     if existing:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
