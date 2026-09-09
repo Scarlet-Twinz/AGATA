@@ -8,6 +8,10 @@
   padding: 18px 12px 14px;
 }
 
+.sidebar-collapsed .sidebar {
+  width: 78px;
+}
+
 .workspace-brand {
   padding: 0 8px;
 }
@@ -273,6 +277,10 @@
   .sidebar {
     width: 238px;
   }
+
+  .sidebar-collapsed .sidebar {
+    width: 78px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -281,6 +289,10 @@
   }
 
   .sidebar {
+    width: 72px;
+  }
+
+  .sidebar-collapsed .sidebar {
     width: 72px;
   }
 
