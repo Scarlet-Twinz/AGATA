@@ -1,0 +1,19 @@
+/* Project detail desktop alignment: keep the evidence rail visually level with the main contractor panel. */
+@media (min-width: 1050px) {
+  .detail-main-grid {
+    align-items: stretch;
+  }
+
+  .detail-sidebar {
+    display: grid;
+    grid-template-rows: max-content minmax(0, 1fr);
+    align-self: stretch;
+    min-height: 100%;
+  }
+
+  .detail-sidebar > .detail-panel:last-child {
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+  }
+}
