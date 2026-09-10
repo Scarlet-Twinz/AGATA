@@ -16,6 +16,7 @@ import RequirementsPage from "./pages/RequirementsPage";
 import RequirementDetailPage from "./pages/RequirementDetailPage";
 import ContractorsPage from "./pages/ContractorsPage";
 import ContractorDetailPage from "./pages/ContractorDetailPage";
+import EvidencePage from "./pages/EvidencePage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -46,7 +47,7 @@ export default function App() {
             <Route path="/contractors/:contractorId" element={<ContractorDetailPage />} />
             <Route path="/requirements" element={<RequirementsPage />} />
             <Route path="/requirements/:requirementId" element={<RequirementDetailPage />} />
-            <Route path="/evidence" element={page("Evidence", "Store, map, and review evidence against requirements.")} />
+            <Route path="/evidence" element={<EvidencePage />} />
             <Route path="/readiness" element={page("Readiness", "See readiness decisions across your workspace.")} />
             <Route path="/rumi" element={page("Rumi", "Ask questions about your compliance workspace and readiness decisions.")} />
             <Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} />
