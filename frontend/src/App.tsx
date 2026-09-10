@@ -14,6 +14,8 @@ import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import RequirementsPage from "./pages/RequirementsPage";
 import RequirementDetailPage from "./pages/RequirementDetailPage";
+import ContractorsPage from "./pages/ContractorsPage";
+import ContractorDetailPage from "./pages/ContractorDetailPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -40,8 +42,8 @@ export default function App() {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} />
-            <Route path="/contractors" element={page("Contractors", "Manage contractor profiles and their evidence.")} />
-            <Route path="/contractors/:contractorId" element={page("Contractor profile", "View evidence, projects, and readiness.")} />
+            <Route path="/contractors" element={<ContractorsPage />} />
+            <Route path="/contractors/:contractorId" element={<ContractorDetailPage />} />
             <Route path="/requirements" element={<RequirementsPage />} />
             <Route path="/requirements/:requirementId" element={<RequirementDetailPage />} />
             <Route path="/evidence" element={page("Evidence", "Store, map, and review evidence against requirements.")} />
