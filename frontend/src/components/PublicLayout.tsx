@@ -9,11 +9,11 @@ const links = [
 ] as const;
 
 const publicLogoStyle = {
-  width: "34px",
-  height: "34px",
+  width: "42px",
+  height: "42px",
   padding: 0,
   border: 0,
-  borderRadius: "8px",
+  borderRadius: "9px",
   background: "#071321",
   boxShadow: "none",
   overflow: "hidden",
@@ -33,22 +33,22 @@ export function PublicLayout() {
   return (
     <div className="public-site">
       <style>{`
-        /* Public logo must be the same compact A mark used in the dashboard. */
+        /* Public A mark: slightly larger than the compact dashboard rail mark. */
         .public-brand {
-          min-width: 34px !important;
-          width: 34px !important;
-          height: 34px !important;
-          flex: 0 0 34px !important;
+          min-width: 42px !important;
+          width: 42px !important;
+          height: 42px !important;
+          flex: 0 0 42px !important;
           padding: 0 !important;
         }
 
         .public-brand .logo-badge {
-          width: 34px !important;
-          height: 34px !important;
-          min-width: 34px !important;
+          width: 42px !important;
+          height: 42px !important;
+          min-width: 42px !important;
           padding: 0 !important;
           border: 0 !important;
-          border-radius: 8px !important;
+          border-radius: 9px !important;
           background: #071321 !important;
           box-shadow: none !important;
           overflow: hidden !important;
@@ -71,10 +71,10 @@ export function PublicLayout() {
         }
 
         .footer-brand {
-          min-width: 34px !important;
-          width: 34px !important;
-          height: 34px !important;
-          flex: 0 0 34px !important;
+          min-width: 42px !important;
+          width: 42px !important;
+          height: 42px !important;
+          flex: 0 0 42px !important;
         }
       `}</style>
 
