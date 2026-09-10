@@ -10,6 +10,7 @@ import "./workspace.css";
 import "./workspace-overrides.css";
 import "./dashboard-final.css";
 import "./workspace-hotfix.css";
+import "./project-detail-layout.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
