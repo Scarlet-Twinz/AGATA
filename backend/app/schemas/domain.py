@@ -88,19 +88,6 @@ class ProjectContractorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ContractorProjectResponse(BaseModel):
-    id: UUID
-    name: str
-    status: str
-    readiness: dict | None = None
-
-
-class ContractorDetailResponse(BaseModel):
-    contractor: ContractorResponse
-    documents: list["DocumentResponse"]
-    projects: list[ContractorProjectResponse]
-
-
 class DocumentCreate(BaseModel):
     contractor_id: UUID | None = None
     name: str = Field(min_length=1, max_length=255)
@@ -114,6 +101,19 @@ class DocumentResponse(DocumentCreate):
     id: UUID
     status: str
     created_at: datetime
+
+
+class ContractorProjectResponse(BaseModel):
+    id: UUID
+    name: str
+    status: str
+    readiness: dict | None = None
+
+
+class ContractorDetailResponse(BaseModel):
+    contractor: ContractorResponse
+    documents: list[DocumentResponse]
+    projects: list[ContractorProjectResponse]
 
 
 class DocumentRequirementMatchResponse(BaseModel):
