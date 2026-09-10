@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, User
+from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, ReadinessStatus, User
 from app.schemas.domain import ReadinessItemResponse, ReadinessResponse
 from app.services.readiness import calculate_readiness
 
@@ -70,21 +70,6 @@ def list_readiness(
         ).all()
     }
 
-    latest_subquery = (
-        select(
-            ComplianceCheck.project_id.label("project_id"),
-            ComplianceCheck.contractor_id.label("contractor_id"),
-            ComplianceCheck.checked_at.label("checked_at"),
-        )
-        .where(
-            ComplianceCheck.company_id == user.company_id,
-            ComplianceCheck.project_id.in_(project_ids),
-            ComplianceCheck.contractor_id.in_(contractor_ids),
-        )
-        .order_by(ComplianceCheck.checked_at.desc())
-        .subquery()
-    )
-
     checks = db.scalars(
         select(ComplianceCheck)
         .where(
@@ -142,8 +127,6 @@ def evaluate_readiness(
 ):
     _assignment_or_404(db, project_id, contractor_id, user.company_id)
     result = calculate_readiness(db, user.company_id, project_id, contractor_id)
-    from app.models.entities import ReadinessStatus
-
     check = ComplianceCheck(
         company_id=user.company_id,
         project_id=project_id,
