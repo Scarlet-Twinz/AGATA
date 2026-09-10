@@ -1,6 +1,11 @@
-/* AGATA workspace precision fixes */
+/* =========================================================
+   AGATA WORKSPACE FINAL PRECISION FIXES
+   ========================================================= */
 
-/* Keep the collapse control reachable in both sidebar states. */
+/* ---------------------------------------------------------
+   1. SIDEBAR COLLAPSE CONTROL
+   --------------------------------------------------------- */
+
 .agata-brand {
   position: relative;
 }
@@ -9,41 +14,30 @@
   position: absolute;
   top: 25px;
   right: 12px;
-  margin-left: 0;
-  z-index: 20;
+  z-index: 30;
+  margin: 0;
 }
 
+/* Collapsed sidebar */
 .agata-shell.collapsed .agata-brand {
   position: relative;
-  justify-content: flex-start;
+  justify-content: center;
+  align-items: center;
   padding: 0;
   gap: 0;
-}
-
-.agata-shell.collapsed .agata-brand-mark {
-  position: absolute;
-  left: 8px;
-  top: 21px;
-  width: 34px;
-  height: 34px;
-  z-index: 1;
-}
-
-.agata-shell.collapsed .agata-brand-mark img {
-  display: none !important;
 }
 
 .agata-shell.collapsed .agata-collapse {
   display: grid !important;
   place-items: center;
   position: absolute;
-  right: 4px;
   top: 25px;
+  right: 4px;
   width: 28px;
   height: 26px;
   margin: 0;
   padding: 0;
-  z-index: 20;
+  z-index: 30;
   cursor: pointer;
 }
 
@@ -51,34 +45,153 @@
   transform: rotate(180deg);
 }
 
-/* Use the dedicated AGATA mark as the visible image. */
+
+/* ---------------------------------------------------------
+   2. AGATA LOGO
+   ---------------------------------------------------------
+
+   The real /logo.png is a complete horizontal AGATA logo.
+   Do NOT use agata-mark.svg here.
+
+   Expanded:
+     show the complete AGATA logo.
+
+   Collapsed:
+     crop the left A mark from the same real logo.
+   --------------------------------------------------------- */
+
 .agata-brand-mark {
+  position: relative;
+  flex: 0 0 auto;
+
+  width: 152px;
+  height: 58px;
+
+  overflow: hidden;
+  border-radius: 8px;
+
   background-color: #071321;
-  background-image: url("/agata-mark.svg");
-  background-position: center;
+  background-image: url("/logo.png");
   background-repeat: no-repeat;
-  background-size: 30px 30px;
+  background-position: center;
+  background-size: contain;
 }
 
-/* On desktop, lower Rumi so its bottom edge lines up with the readiness/trend row. */
+/* The original image element is no longer needed. */
+.agata-brand-mark img {
+  display: none !important;
+}
+
+/* We already have the wordmark inside logo.png. */
+.agata-brand-copy {
+  display: none !important;
+}
+
+/*
+   When collapsed, turn the same real logo into a square
+   showing the A mark.
+
+   The source logo has the A on the left and the wordmark
+   to its right, so the crop is intentionally positioned
+   toward the left side of the source image.
+*/
+.agata-shell.collapsed .agata-brand-mark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+
+  background-size: 108px auto;
+  background-position: left center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+}
+
+
+/* ---------------------------------------------------------
+   3. RUMI — ALIGN WITH THE ENTIRE PRIMARY DASHBOARD
+   ---------------------------------------------------------
+
+   Target:
+
+       KPI  KPI  KPI  KPI | RUMI
+                           |      |
+       READINESS | TREND   |      |
+                           |      |
+
+   Rumi must start at the SAME TOP as the KPI row
+   and finish at the SAME BOTTOM as the readiness/trend row.
+
+   Do NOT use margin-top here.
+   --------------------------------------------------------- */
+
+.agata-dashboard-layout {
+  align-items: stretch !important;
+}
+
+.agata-rumi-card {
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 0;
+  margin-top: 0 !important;
+}
+
+
+/* ---------------------------------------------------------
+   4. KEEP THE RUMI CONTENT PROPORTIONAL
+   --------------------------------------------------------- */
+
+.agata-rumi-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.agata-rumi-header {
+  flex: 0 0 auto;
+}
+
+.agata-rumi-prompts {
+  flex: 0 0 auto;
+}
+
+
+/* ---------------------------------------------------------
+   5. DESKTOP SAFETY
+   --------------------------------------------------------- */
+
 @media (min-width: 981px) {
+  .agata-dashboard-layout {
+    align-items: stretch !important;
+  }
+
+  .agata-rumi-card {
+    align-self: stretch !important;
+    margin-top: 0 !important;
+  }
+}
+
+
+/* ---------------------------------------------------------
+   6. MOBILE / TABLET
+   --------------------------------------------------------- */
+
+@media (max-width: 980px) {
   .agata-dashboard-layout {
     align-items: start !important;
   }
 
   .agata-rumi-card {
-    align-self: start !important;
-    margin-top: 56px !important;
-  }
-}
-
-@media (max-width: 980px) {
-  .agata-dashboard-layout {
-    align-items: start;
+    align-self: stretch !important;
+    height: auto !important;
+    margin-top: 0 !important;
   }
 
-  .agata-rumi-card {
-    align-self: stretch;
-    margin-top: 0;
+  .agata-brand-mark {
+    width: 152px;
+    height: 58px;
+  }
+
+  .agata-shell.collapsed .agata-brand-mark {
+    width: 34px;
+    height: 34px;
   }
 }
