@@ -21,3 +21,20 @@ body {
 .agata-nav {
   overscroll-behavior: contain;
 }
+
+/* Give the left and right topbar groups the same visual box height. */
+.agata-topbar-left,
+.agata-topbar-tools {
+  min-height: 38px;
+  align-items: center;
+}
+
+.agata-topbar-left > div {
+  align-self: center;
+}
+
+.agata-search,
+.agata-tool-button,
+.agata-top-avatar {
+  flex-shrink: 0;
+}
