@@ -1,0 +1,57 @@
+/* AGATA workspace precision fixes */
+
+/* Keep the collapse control reachable after the sidebar is collapsed. */
+.agata-brand {
+  position: relative;
+}
+
+.agata-collapse {
+  position: absolute;
+  top: 25px;
+  right: 12px;
+  margin-left: 0;
+  z-index: 5;
+}
+
+.agata-shell.collapsed .agata-brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.agata-shell.collapsed .agata-collapse {
+  display: grid;
+  right: 4px;
+  top: 25px;
+}
+
+/* Use the dedicated AGATA mark instead of cropping the full wordmark. */
+.agata-brand-mark img {
+  content: url("/agata-mark.svg");
+  position: static;
+  width: 30px;
+  height: 30px;
+  max-width: none;
+  object-fit: contain;
+  display: block;
+  transform: none;
+}
+
+/* Make the Rumi card stretch to the same bottom edge as the readiness/trend area. */
+.agata-dashboard-layout {
+  align-items: stretch;
+}
+
+.agata-rumi-card {
+  align-self: stretch;
+  height: auto;
+}
+
+@media (max-width: 1180px) {
+  .agata-dashboard-layout {
+    align-items: start;
+  }
+
+  .agata-rumi-card {
+    height: auto;
+  }
+}
