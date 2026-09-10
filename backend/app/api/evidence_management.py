@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import Contractor, Document, DocumentRequirementMatch, Requirement, User
-from app.schemas.domain import DocumentDetailResponse, DocumentRequirementMatchResponse, DocumentUpdate
+from app.schemas.domain import DocumentDetailResponse, DocumentRequirementMatchResponse, DocumentResponse, DocumentUpdate
 
 router = APIRouter(prefix="/api", tags=["evidence-management"])
 
@@ -69,7 +69,7 @@ def document_detail(
     )
 
 
-@router.put("/documents/{document_id}", response_model=object)
+@router.put("/documents/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: UUID,
     payload: DocumentUpdate,
