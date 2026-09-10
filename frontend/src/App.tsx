@@ -17,6 +17,7 @@ import RequirementDetailPage from "./pages/RequirementDetailPage";
 import ContractorsPage from "./pages/ContractorsPage";
 import ContractorDetailPage from "./pages/ContractorDetailPage";
 import EvidencePage from "./pages/EvidencePage";
+import ReadinessPage from "./pages/ReadinessPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -48,7 +49,7 @@ export default function App() {
             <Route path="/requirements" element={<RequirementsPage />} />
             <Route path="/requirements/:requirementId" element={<RequirementDetailPage />} />
             <Route path="/evidence" element={<EvidencePage />} />
-            <Route path="/readiness" element={page("Readiness", "See readiness decisions across your workspace.")} />
+            <Route path="/readiness" element={<ReadinessPage />} />
             <Route path="/rumi" element={page("Rumi", "Ask questions about your compliance workspace and readiness decisions.")} />
             <Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} />
             <Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} />
