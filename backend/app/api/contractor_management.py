@@ -17,9 +17,10 @@ from app.models.entities import (
 from app.schemas.domain import (
     ContractorDetailResponse,
     ContractorProjectResponse,
+    ContractorResponse,
+    ContractorUpdate,
     ProjectContractorCreate,
     ProjectContractorResponse,
-    ContractorUpdate,
 )
 
 router = APIRouter(prefix="/api", tags=["contractor-management"])
@@ -70,7 +71,7 @@ def contractor_detail(
             .order_by(Project.name.asc())
         ).all()
 
-    latest_checks = []
+    project_responses = []
     for project in projects:
         check = db.scalar(
             select(ComplianceCheck)
@@ -82,38 +83,32 @@ def contractor_detail(
             .order_by(ComplianceCheck.checked_at.desc())
             .limit(1)
         )
-        if check:
-            latest_checks.append(check)
-
-    return ContractorDetailResponse(
-        contractor=contractor,
-        documents=documents,
-        projects=[
+        project_responses.append(
             ContractorProjectResponse(
                 id=project.id,
                 name=project.name,
                 status=project.status,
-                readiness=next(
-                    (
-                        {
-                            "score": check.score,
-                            "status": check.status.value,
-                            "checked_at": check.checked_at,
-                            "explanation": check.explanation,
-                            "missing_requirements": [],
-                        }
-                        for check in latest_checks
-                        if check.project_id == project.id
-                    ),
-                    None,
+                readiness=(
+                    {
+                        "score": check.score,
+                        "status": check.status.value,
+                        "checked_at": check.checked_at,
+                        "explanation": check.explanation,
+                    }
+                    if check
+                    else None
                 ),
             )
-            for project in projects
-        ],
+        )
+
+    return ContractorDetailResponse(
+        contractor=contractor,
+        documents=documents,
+        projects=project_responses,
     )
 
 
-@router.put("/contractors/{contractor_id}", response_model=object)
+@router.put("/contractors/{contractor_id}", response_model=ContractorResponse)
 def update_contractor(
     contractor_id: UUID,
     payload: ContractorUpdate,
@@ -122,10 +117,6 @@ def update_contractor(
 ):
     contractor = contractor_or_404(db, contractor_id, user.company_id)
     values = payload.model_dump(exclude_unset=True)
-    if "name" in values:
-        values["name"] = values["name"].strip()
-        if not values["name"]:
-            raise HTTPException(status_code=422, detail="Contractor name cannot be empty")
     for key, value in values.items():
         setattr(contractor, key, value)
     db.commit()
