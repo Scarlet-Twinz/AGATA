@@ -46,13 +46,8 @@
 
 
 /* ---------------------------------------------------------
-   2. AGATA LOGO
-   ---------------------------------------------------------
-
-   /logo.png is the real AGATA artwork: the A sits above
-   the AGATA wordmark. For the workspace, we use the A as
-   the compact mark and keep the existing AGATA text beside
-   it, matching the intended workspace lockup.
+   2. AGATA LOGO — USE THE SAME REAL IMAGE ELEMENT APPROACH
+      AS THE PUBLIC HEADER / FOOTER
    --------------------------------------------------------- */
 
 .agata-brand-mark {
@@ -62,19 +57,27 @@
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  background-color: #071321;
-  background-image: url("/logo.png");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: 110px auto;
+  background: #071321;
+  display: block;
 }
 
-/* Use the CSS background so the broken-image icon can never appear. */
+/* Replace the old /logo.png source at render time with the
+   dedicated AGATA mark asset. This removes the broken-image
+   state completely while keeping the existing JSX untouched. */
 .agata-brand-mark img {
-  display: none !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  transform: none !important;
+  content: url("/agata-mark.png") !important;
 }
 
-/* Keep the workspace wordmark and tagline visible. */
+/* Keep the workspace wordmark and tagline exactly as before. */
 .agata-brand-copy {
   display: flex !important;
   min-width: 0;
@@ -89,13 +92,11 @@
   color: #7f95ad;
 }
 
-/* In the collapsed rail, show only the centered A mark. */
+/* In the collapsed rail, show only the dedicated A mark. */
 .agata-shell.collapsed .agata-brand-mark {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
-  background-size: 110px auto;
-  background-position: center center;
   border-radius: 8px;
 }
 
