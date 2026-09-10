@@ -18,6 +18,7 @@ import ContractorsPage from "./pages/ContractorsPage";
 import ContractorDetailPage from "./pages/ContractorDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import ReadinessPage from "./pages/ReadinessPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -55,7 +56,7 @@ export default function App() {
             <Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} />
             <Route path="/usage" element={page("Usage", "Monitor workspace usage against your current plan.")} />
             <Route path="/team" element={page("Team", "Invite teammates and manage workspace access.")} />
-            <Route path="/notifications" element={page("Notifications", "Review operational items that need your attention.")} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/audit" element={page("Audit Trail", "Track important changes and decisions across the workspace.")} />
             <Route path="/settings" element={page("Settings", "Manage your company, profile, security, and workspace preferences.")} />
             <Route path="/documents" element={<Navigate to="/evidence" replace />} />
