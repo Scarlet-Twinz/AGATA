@@ -8,6 +8,25 @@ const links = [
   ["Contact", "/contact"],
 ] as const;
 
+const publicLogoStyle = {
+  width: "34px",
+  height: "34px",
+  padding: 0,
+  border: 0,
+  borderRadius: "8px",
+  background: "#071321",
+  boxShadow: "none",
+  overflow: "hidden",
+} as const;
+
+const publicLogoImageStyle = {
+  width: "100%",
+  height: "100%",
+  display: "block",
+  objectFit: "contain",
+  objectPosition: "center",
+} as const;
+
 export function PublicLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -15,7 +34,7 @@ export function PublicLayout() {
     <div className="public-site">
       <header className="public-nav">
         <Link className="public-brand" to="/" aria-label="AGATA home" onClick={() => setMenuOpen(false)}>
-          <span className="logo-badge"><img src="/agata-mark.png" alt="AGATA" /></span>
+          <span className="logo-badge" style={publicLogoStyle}><img src="/agata-mark.png" alt="AGATA" style={publicLogoImageStyle} /></span>
         </Link>
         <nav className="public-links" aria-label="Main navigation">
           {links.map(([label, to]) => (
@@ -54,7 +73,7 @@ export function PublicLayout() {
       <main><Outlet /></main>
       <footer className="public-footer">
         <div>
-          <Link className="public-brand footer-brand" to="/"><span className="logo-badge"><img src="/agata-mark.png" alt="AGATA" /></span></Link>
+          <Link className="public-brand footer-brand" to="/"><span className="logo-badge" style={publicLogoStyle}><img src="/agata-mark.png" alt="AGATA" style={publicLogoImageStyle} /></span></Link>
           <p>Compliance intelligence for teams that need to know what is ready, what is missing, and what needs attention.</p>
           <a className="footer-email" href="mailto:anthony@anthonytech.ng">anthony@anthonytech.ng</a>
           <a className="footer-phone" href="tel:09031530359">09031530359</a>
