@@ -1,6 +1,6 @@
 /* AGATA workspace precision fixes */
 
-/* Keep the collapse control reachable after the sidebar is collapsed. */
+/* Keep the collapse control reachable in both sidebar states. */
 .agata-brand {
   position: relative;
 }
@@ -10,48 +10,75 @@
   top: 25px;
   right: 12px;
   margin-left: 0;
-  z-index: 5;
+  z-index: 20;
 }
 
 .agata-shell.collapsed .agata-brand {
-  justify-content: center;
+  position: relative;
+  justify-content: flex-start;
   padding: 0;
+  gap: 0;
+}
+
+.agata-shell.collapsed .agata-brand-mark {
+  position: absolute;
+  left: 8px;
+  top: 21px;
+  width: 34px;
+  height: 34px;
+  z-index: 1;
+}
+
+.agata-shell.collapsed .agata-brand-mark img {
+  display: none !important;
 }
 
 .agata-shell.collapsed .agata-collapse {
-  display: grid;
+  display: grid !important;
+  place-items: center;
+  position: absolute;
   right: 4px;
   top: 25px;
+  width: 28px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  z-index: 20;
+  cursor: pointer;
 }
 
-/* Use the dedicated AGATA mark instead of cropping the full wordmark. */
-.agata-brand-mark img {
-  content: url("/agata-mark.svg");
-  position: static;
-  width: 30px;
-  height: 30px;
-  max-width: none;
-  object-fit: contain;
-  display: block;
-  transform: none;
+.agata-shell.collapsed .agata-collapse svg {
+  transform: rotate(180deg);
 }
 
-/* Make the Rumi card stretch to the same bottom edge as the readiness/trend area. */
-.agata-dashboard-layout {
-  align-items: stretch;
+/* Use the dedicated AGATA mark as the visible image. */
+.agata-brand-mark {
+  background-color: #071321;
+  background-image: url("/agata-mark.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 30px 30px;
 }
 
-.agata-rumi-card {
-  align-self: stretch;
-  height: auto;
+/* On desktop, lower Rumi so its bottom edge lines up with the readiness/trend row. */
+@media (min-width: 981px) {
+  .agata-dashboard-layout {
+    align-items: start !important;
+  }
+
+  .agata-rumi-card {
+    align-self: start !important;
+    margin-top: 56px !important;
+  }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 980px) {
   .agata-dashboard-layout {
     align-items: start;
   }
 
   .agata-rumi-card {
-    height: auto;
+    align-self: stretch;
+    margin-top: 0;
   }
 }
