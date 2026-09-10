@@ -73,6 +73,15 @@ class ProjectRequirement(Base):
     requirement_id: Mapped[UUID] = mapped_column(ForeignKey("requirements.id", ondelete="CASCADE"), index=True)
 
 
+class ProjectContractor(Base):
+    __tablename__ = "project_contractors"
+    __table_args__ = (UniqueConstraint("project_id", "contractor_id", name="uq_project_contractor"),)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    contractor_id: Mapped[UUID] = mapped_column(ForeignKey("contractors.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
