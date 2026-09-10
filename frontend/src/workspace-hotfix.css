@@ -18,7 +18,6 @@
   margin: 0;
 }
 
-/* Collapsed sidebar */
 .agata-shell.collapsed .agata-brand {
   position: relative;
   justify-content: center;
@@ -50,78 +49,59 @@
    2. AGATA LOGO
    ---------------------------------------------------------
 
-   The real /logo.png is a complete horizontal AGATA logo.
-   Do NOT use agata-mark.svg here.
-
-   Expanded:
-     show the complete AGATA logo.
-
-   Collapsed:
-     crop the left A mark from the same real logo.
+   /logo.png is the real AGATA artwork: the A sits above
+   the AGATA wordmark. For the workspace, we use the A as
+   the compact mark and keep the existing AGATA text beside
+   it, matching the intended workspace lockup.
    --------------------------------------------------------- */
 
 .agata-brand-mark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   position: relative;
-  flex: 0 0 auto;
-
-  width: 152px;
-  height: 58px;
-
   overflow: hidden;
   border-radius: 8px;
-
   background-color: #071321;
   background-image: url("/logo.png");
   background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background-position: center center;
+  background-size: 110px auto;
 }
 
-/* The original image element is no longer needed. */
+/* Use the CSS background so the broken-image icon can never appear. */
 .agata-brand-mark img {
   display: none !important;
 }
 
-/* We already have the wordmark inside logo.png. */
+/* Keep the workspace wordmark and tagline visible. */
 .agata-brand-copy {
-  display: none !important;
+  display: flex !important;
+  min-width: 0;
+  flex-direction: column;
 }
 
-/*
-   When collapsed, turn the same real logo into a square
-   showing the A mark.
+.agata-brand-copy strong {
+  color: #f5f8fc;
+}
 
-   The source logo has the A on the left and the wordmark
-   to its right, so the crop is intentionally positioned
-   toward the left side of the source image.
-*/
+.agata-brand-copy span {
+  color: #7f95ad;
+}
+
+/* In the collapsed rail, show only the centered A mark. */
 .agata-shell.collapsed .agata-brand-mark {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
-
-  background-size: 108px auto;
-  background-position: left center;
-  background-repeat: no-repeat;
+  background-size: 110px auto;
+  background-position: center center;
   border-radius: 8px;
 }
 
 
 /* ---------------------------------------------------------
    3. RUMI — ALIGN WITH THE ENTIRE PRIMARY DASHBOARD
-   ---------------------------------------------------------
-
-   Target:
-
-       KPI  KPI  KPI  KPI | RUMI
-                           |      |
-       READINESS | TREND   |      |
-                           |      |
-
-   Rumi must start at the SAME TOP as the KPI row
-   and finish at the SAME BOTTOM as the readiness/trend row.
-
-   Do NOT use margin-top here.
    --------------------------------------------------------- */
 
 .agata-dashboard-layout {
@@ -137,7 +117,7 @@
 
 
 /* ---------------------------------------------------------
-   4. KEEP THE RUMI CONTENT PROPORTIONAL
+   4. KEEP RUMI CONTENT PROPORTIONAL
    --------------------------------------------------------- */
 
 .agata-rumi-card {
@@ -186,8 +166,8 @@
   }
 
   .agata-brand-mark {
-    width: 152px;
-    height: 58px;
+    width: 34px;
+    height: 34px;
   }
 
   .agata-shell.collapsed .agata-brand-mark {
