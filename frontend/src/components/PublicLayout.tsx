@@ -32,6 +32,52 @@ export function PublicLayout() {
 
   return (
     <div className="public-site">
+      <style>{`
+        /* Public logo must be the same compact A mark used in the dashboard. */
+        .public-brand {
+          min-width: 34px !important;
+          width: 34px !important;
+          height: 34px !important;
+          flex: 0 0 34px !important;
+          padding: 0 !important;
+        }
+
+        .public-brand .logo-badge {
+          width: 34px !important;
+          height: 34px !important;
+          min-width: 34px !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 8px !important;
+          background: #071321 !important;
+          box-shadow: none !important;
+          overflow: hidden !important;
+          position: relative !important;
+        }
+
+        .public-brand .logo-badge img {
+          position: static !important;
+          inset: auto !important;
+          width: 100% !important;
+          height: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
+          display: block !important;
+          object-fit: contain !important;
+          object-position: center !important;
+          left: auto !important;
+          top: auto !important;
+          transform: none !important;
+        }
+
+        .footer-brand {
+          min-width: 34px !important;
+          width: 34px !important;
+          height: 34px !important;
+          flex: 0 0 34px !important;
+        }
+      `}</style>
+
       <header className="public-nav">
         <Link className="public-brand" to="/" aria-label="AGATA home" onClick={() => setMenuOpen(false)}>
           <span className="logo-badge" style={publicLogoStyle}><img src="/agata-mark.png" alt="AGATA" style={publicLogoImageStyle} /></span>
