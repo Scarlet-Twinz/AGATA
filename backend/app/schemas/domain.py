@@ -233,3 +233,20 @@ class DashboardResponse(BaseModel):
     attention_items: list[DashboardAttention]
     upcoming_expirations: list[DashboardExpiration]
     readiness_trend: list[DashboardTrendPoint]
+
+
+class NotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    kind: str
+    severity: str
+    title: str
+    description: str
+    href: str
+    status: str
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationUnreadCount(BaseModel):
+    unread_count: int
