@@ -1,0 +1,23 @@
+/* Keep route transitions visually stable across the authenticated workspace. */
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+.agata-shell {
+  width: 100%;
+  overflow-x: clip;
+}
+
+.agata-main,
+.agata-content {
+  min-width: 0;
+}
+
+.agata-nav {
+  overscroll-behavior: contain;
+}
