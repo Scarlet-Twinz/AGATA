@@ -160,6 +160,20 @@ class ReadinessResponse(BaseModel):
     missing_requirements: list[str]
 
 
+class ReadinessItemResponse(BaseModel):
+    project_id: UUID
+    project_name: str
+    contractor_id: UUID
+    contractor_name: str
+    contractor_status: str
+    evaluated: bool
+    score: int | None
+    status: str | None
+    explanation: str | None
+    missing_requirements: list[str]
+    checked_at: datetime | None
+
+
 class DashboardProject(BaseModel):
     id: UUID
     name: str
