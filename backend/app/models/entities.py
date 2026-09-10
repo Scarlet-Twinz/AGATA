@@ -114,3 +114,19 @@ class ComplianceCheck(Base):
     status: Mapped[ReadinessStatus] = mapped_column(SAEnum(ReadinessStatus), default=ReadinessStatus.NOT_READY)
     explanation: Mapped[str] = mapped_column(Text, default="")
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (UniqueConstraint("company_id", "source_key", name="uq_notification_source"),)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
+    source_key: Mapped[str] = mapped_column(String(255), index=True)
+    kind: Mapped[str] = mapped_column(String(50))
+    severity: Mapped[str] = mapped_column(String(30))
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    href: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(30), default="active", index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
