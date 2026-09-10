@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { WorkspaceScrollReset } from "./components/WorkspaceScrollReset";
 import { ThemeProvider } from "./theme/ThemeContext";
 import "./styles.css";
 import "./public-polish.css";
@@ -11,10 +12,12 @@ import "./workspace-overrides.css";
 import "./dashboard-final.css";
 import "./workspace-hotfix.css";
 import "./project-detail-layout.css";
+import "./workspace-navigation-fixes.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>
+      <WorkspaceScrollReset />
       <ThemeProvider>
         <App />
       </ThemeProvider>
