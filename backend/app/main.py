@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
+from app.api.evidence_management import router as evidence_management_router
 from app.api.project_workflow import router as project_workflow_router
 from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
@@ -40,6 +41,7 @@ app.include_router(resources_router)
 app.include_router(project_workflow_router)
 app.include_router(requirement_management_router)
 app.include_router(contractor_management_router)
+app.include_router(evidence_management_router)
 app.include_router(rumi_router)
 
 
