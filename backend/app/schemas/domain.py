@@ -96,6 +96,25 @@ class DocumentCreate(BaseModel):
     storage_key: str | None = None
 
 
+class DocumentUpdate(BaseModel):
+    contractor_id: UUID | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    document_type: str | None = Field(default=None, min_length=1, max_length=100)
+    expires_at: datetime | None = None
+    storage_key: str | None = None
+    status: str | None = Field(default=None, min_length=1, max_length=40)
+
+    @field_validator("name", "document_type", "status")
+    @classmethod
+    def clean_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Value cannot be empty")
+        return value
+
+
 class DocumentResponse(DocumentCreate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -123,6 +142,13 @@ class DocumentRequirementMatchResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentDetailResponse(BaseModel):
+    document: DocumentResponse
+    contractor_id: UUID | None
+    contractor_name: str | None
+    matches: list[DocumentRequirementMatchResponse]
 
 
 class ReadinessResponse(BaseModel):
