@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.api.auth import router as auth_router
 from app.api.project_workflow import router as project_workflow_router
+from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
 from app.api.rumi import router as rumi_router
 from app.core.config import get_settings
@@ -30,12 +31,13 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"] ,
 )
 
 app.include_router(auth_router)
 app.include_router(resources_router)
 app.include_router(project_workflow_router)
+app.include_router(requirement_management_router)
 app.include_router(rumi_router)
 
 
