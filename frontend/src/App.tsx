@@ -12,6 +12,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
+import RequirementsPage from "./pages/RequirementsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -40,7 +41,7 @@ export default function App() {
             <Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} />
             <Route path="/contractors" element={page("Contractors", "Manage contractor profiles and their evidence.")} />
             <Route path="/contractors/:contractorId" element={page("Contractor profile", "View evidence, projects, and readiness.")} />
-            <Route path="/requirements" element={page("Requirements", "Build and reuse your compliance requirement library.")} />
+            <Route path="/requirements" element={<RequirementsPage />} />
             <Route path="/evidence" element={page("Evidence", "Store, map, and review evidence against requirements.")} />
             <Route path="/readiness" element={page("Readiness", "See readiness decisions across your workspace.")} />
             <Route path="/rumi" element={page("Rumi", "Ask questions about your compliance workspace and readiness decisions.")} />
