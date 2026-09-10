@@ -44,10 +44,8 @@
   transform: rotate(180deg);
 }
 
-
 /* ---------------------------------------------------------
-   2. AGATA LOGO — USE THE SAME REAL IMAGE ELEMENT APPROACH
-      AS THE PUBLIC HEADER / FOOTER
+   2. AGATA LOGO
    --------------------------------------------------------- */
 
 .agata-brand-mark {
@@ -61,9 +59,6 @@
   display: block;
 }
 
-/* Replace the old /logo.png source at render time with the
-   dedicated AGATA mark asset. This removes the broken-image
-   state completely while keeping the existing JSX untouched. */
 .agata-brand-mark img {
   display: block !important;
   position: absolute !important;
@@ -77,7 +72,6 @@
   content: url("/agata-mark.png") !important;
 }
 
-/* Keep the workspace wordmark and tagline exactly as before. */
 .agata-brand-copy {
   display: flex !important;
   min-width: 0;
@@ -92,14 +86,20 @@
   color: #7f95ad;
 }
 
-/* In the collapsed rail, show only the dedicated A mark. */
+/* The collapsed rail must contain only the A mark — never the AGATA wordmark. */
+.agata-shell.collapsed .agata-brand-copy {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  visibility: hidden !important;
+}
+
 .agata-shell.collapsed .agata-brand-mark {
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
   border-radius: 8px;
 }
-
 
 /* ---------------------------------------------------------
    3. RUMI — ALIGN WITH THE ENTIRE PRIMARY DASHBOARD
@@ -115,7 +115,6 @@
   min-height: 0;
   margin-top: 0 !important;
 }
-
 
 /* ---------------------------------------------------------
    4. KEEP RUMI CONTENT PROPORTIONAL
@@ -134,7 +133,6 @@
   flex: 0 0 auto;
 }
 
-
 /* ---------------------------------------------------------
    5. DESKTOP SAFETY
    --------------------------------------------------------- */
@@ -149,7 +147,6 @@
     margin-top: 0 !important;
   }
 }
-
 
 /* ---------------------------------------------------------
    6. MOBILE / TABLET
@@ -175,4 +172,31 @@
     width: 34px;
     height: 34px;
   }
+}
+
+/* ---------------------------------------------------------
+   7. PUBLIC / AUTH BRAND CROP
+      Keep the real /logo.png, but crop it to show the A and
+      a little of the white AGATA wordmark — not PNSTAP.
+   --------------------------------------------------------- */
+
+.public-brand .logo-badge img {
+  position: absolute !important;
+  width: 140px !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: block !important;
+  object-fit: initial !important;
+  left: -50px !important;
+  top: -12px !important;
+  transform: none !important;
+  border-radius: 0 !important;
+}
+
+.footer-brand .logo-badge img {
+  width: 140px !important;
+  max-width: none !important;
+  left: -50px !important;
+  top: -12px !important;
 }
