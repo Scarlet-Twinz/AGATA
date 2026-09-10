@@ -11,6 +11,7 @@ import { LegalPage } from "./pages/LegalPage";
 import { LoginPage } from "./pages/LoginPage";
 import { SignupPage } from "./pages/SignupPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ProjectDetailPage from "./pages/ProjectDetailPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
@@ -35,7 +36,7 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:projectId" element={page("Project overview", "Project requirements, contractors, evidence, and readiness.")} />
+            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} />
             <Route path="/contractors" element={page("Contractors", "Manage contractor profiles and their evidence.")} />
             <Route path="/contractors/:contractorId" element={page("Contractor profile", "View evidence, projects, and readiness.")} />
