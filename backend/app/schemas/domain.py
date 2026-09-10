@@ -1,13 +1,38 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ContractorCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     email: str | None = None
     phone: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Contractor name must contain at least 2 characters")
+        return value
+
+
+class ContractorUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    email: str | None = None
+    phone: str | None = None
+    status: str | None = Field(default=None, min_length=1, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Contractor name must contain at least 2 characters")
+        return value
 
 
 class ContractorResponse(ContractorCreate):
@@ -48,6 +73,32 @@ class ProjectRequirementResponse(BaseModel):
     requirement_id: UUID
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectContractorCreate(BaseModel):
+    contractor_id: UUID
+
+
+class ProjectContractorResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    contractor_id: UUID
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractorProjectResponse(BaseModel):
+    id: UUID
+    name: str
+    status: str
+    readiness: dict | None = None
+
+
+class ContractorDetailResponse(BaseModel):
+    contractor: ContractorResponse
+    documents: list["DocumentResponse"]
+    projects: list[ContractorProjectResponse]
 
 
 class DocumentCreate(BaseModel):
