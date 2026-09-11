@@ -27,6 +27,21 @@ class InvitationCreate(BaseModel):
         return value
 
 
+class WorkspaceProfileUpdate(BaseModel):
+    company_name: str | None = Field(default=None, min_length=1, max_length=160)
+    full_name: str | None = Field(default=None, min_length=1, max_length=160)
+
+    @field_validator("company_name", "full_name")
+    @classmethod
+    def clean_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Value cannot be empty")
+        return value
+
+
 @router.get("/summary")
 def workspace_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     company_id = user.company_id
@@ -82,3 +97,20 @@ def revoke_invitation(invitation_id: UUID, db: Session = Depends(get_db), user: 
 def workspace_profile(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     company = db.scalar(select(Company).where(Company.id == user.company_id))
     return {"company": {"id": str(company.id), "name": company.name} if company else None, "user": {"id": str(user.id), "name": user.full_name, "email": user.email}}
+
+
+@router.patch("/profile")
+def update_workspace_profile(payload: WorkspaceProfileUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    company = db.scalar(select(Company).where(Company.id == user.company_id))
+    if not company:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if payload.company_name is not None:
+        company.name = payload.company_name
+    if payload.full_name is not None:
+        user.full_name = payload.full_name
+
+    db.commit()
+    db.refresh(company)
+    db.refresh(user)
+    return {"company": {"id": str(company.id), "name": company.name}, "user": {"id": str(user.id), "name": user.full_name, "email": user.email}}
