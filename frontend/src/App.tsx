@@ -18,6 +18,7 @@ import ContractorsPage from "./pages/ContractorsPage";
 import ContractorDetailPage from "./pages/ContractorDetailPage";
 import EvidencePage from "./pages/EvidencePage";
 import ReadinessPage from "./pages/ReadinessPage";
+import RumiPage from "./pages/RumiPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
@@ -51,7 +52,7 @@ export default function App() {
             <Route path="/requirements/:requirementId" element={<RequirementDetailPage />} />
             <Route path="/evidence" element={<EvidencePage />} />
             <Route path="/readiness" element={<ReadinessPage />} />
-            <Route path="/rumi" element={page("Rumi", "Ask questions about your compliance workspace and readiness decisions.")} />
+            <Route path="/rumi" element={<RumiPage />} />
             <Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} />
             <Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} />
             <Route path="/usage" element={page("Usage", "Monitor workspace usage against your current plan.")} />
