@@ -120,8 +120,6 @@ export function HomePage() {
       <section className="rumi-section"><div className="rumi-copy"><p className="section-kicker">Meet Rumi</p><h2>Ask the workspace. Understand the answer.</h2><p>Rumi sits on top of AGATA's structured data. It can explain readiness, surface patterns, and help teams understand what needs attention—while the deterministic readiness engine remains the source of truth.</p><Link className="secondary-button" to="/how-it-works">See the workflow <span>→</span></Link></div><div className="rumi-card"><div className="rumi-avatar">R</div><div><small>RUMI · AGATA INTELLIGENCE</small><p>Why isn't Acme Engineering ready for the project?</p><div className="rumi-answer">Acme is missing a valid Safety Certification. Insurance and Tax Clearance are already satisfied.</div></div></div></section>
 
       <section className="enterprise-close"><p className="section-kicker">The next step</p><h2>Make compliance readiness a decision your team can see.</h2><p>AGATA is being built to turn requirements and evidence into a workflow people can understand, review, and act on.</p><Link className="primary-button large" to="/signup">Get started with AGATA <span>→</span></Link></section>
-
-      <section className="cta-section"><p className="section-kicker">Ready when you are</p><h2>Make the next compliance decision with clarity.</h2><p>Start building your workspace and see how AGATA turns evidence into readiness.</p><Link className="primary-button large" to="/signup">Get started with AGATA <span>→</span></Link></section>
     </>
   );
 }
