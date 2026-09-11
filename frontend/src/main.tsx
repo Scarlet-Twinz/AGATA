@@ -7,6 +7,7 @@ import { ThemeProvider } from "./theme/ThemeContext";
 import "./styles.css";
 import "./public-polish.css";
 import "./final-public-fixes.css";
+import "./enterprise-home.css";
 import "./workspace.css";
 import "./workspace-overrides.css";
 import "./dashboard-final.css";
