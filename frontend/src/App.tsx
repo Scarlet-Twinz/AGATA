@@ -20,52 +20,21 @@ import EvidencePage from "./pages/EvidencePage";
 import ReadinessPage from "./pages/ReadinessPage";
 import RumiPage from "./pages/RumiPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import UsagePage from "./pages/UsagePage";
+import TeamPage from "./pages/TeamPage";
+import SettingsPage from "./pages/SettingsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
 const page = (title: string, description?: string) => <PlaceholderPage title={title} description={description} />;
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <Routes>
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/how-it-works" element={<PublicInfoPage />} />
-          <Route path="/about" element={<PublicInfoPage />} />
-          <Route path="/faq" element={<PublicInfoPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/privacy" element={<LegalPage />} />
-          <Route path="/terms" element={<LegalPage />} />
-          <Route path="/support" element={<Navigate to="/contact" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-        </Route>
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppShell />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-            <Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} />
-            <Route path="/contractors" element={<ContractorsPage />} />
-            <Route path="/contractors/:contractorId" element={<ContractorDetailPage />} />
-            <Route path="/requirements" element={<RequirementsPage />} />
-            <Route path="/requirements/:requirementId" element={<RequirementDetailPage />} />
-            <Route path="/evidence" element={<EvidencePage />} />
-            <Route path="/readiness" element={<ReadinessPage />} />
-            <Route path="/rumi" element={<RumiPage />} />
-            <Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} />
-            <Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} />
-            <Route path="/usage" element={page("Usage", "Monitor workspace usage against your current plan.")} />
-            <Route path="/team" element={page("Team", "Invite teammates and manage workspace access.")} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/audit" element={page("Audit Trail", "Track important changes and decisions across the workspace.")} />
-            <Route path="/settings" element={page("Settings", "Manage your company, profile, security, and workspace preferences.")} />
-            <Route path="/documents" element={<Navigate to="/evidence" replace />} />
-            <Route path="/alerts" element={<Navigate to="/notifications" replace />} />
-          </Route>
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AuthProvider>
-  );
+  return <AuthProvider><Routes>
+    <Route element={<PublicLayout />}>
+      <Route path="/" element={<HomePage />} /><Route path="/how-it-works" element={<PublicInfoPage />} /><Route path="/about" element={<PublicInfoPage />} /><Route path="/faq" element={<PublicInfoPage />} /><Route path="/contact" element={<ContactPage />} /><Route path="/privacy" element={<LegalPage />} /><Route path="/terms" element={<LegalPage />} /><Route path="/support" element={<Navigate to="/contact" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/signup" element={<SignupPage />} />
+    </Route>
+    <Route element={<ProtectedRoute />}><Route element={<AppShell />}>
+      <Route path="/dashboard" element={<DashboardPage />} /><Route path="/projects" element={<ProjectsPage />} /><Route path="/projects/:projectId" element={<ProjectDetailPage />} /><Route path="/projects/:projectId/contractors/:contractorId" element={page("Contractor readiness", "See whether a contractor is ready for this project and why.")} /><Route path="/contractors" element={<ContractorsPage />} /><Route path="/contractors/:contractorId" element={<ContractorDetailPage />} /><Route path="/requirements" element={<RequirementsPage />} /><Route path="/requirements/:requirementId" element={<RequirementDetailPage />} /><Route path="/evidence" element={<EvidencePage />} /><Route path="/readiness" element={<ReadinessPage />} /><Route path="/rumi" element={<RumiPage />} /><Route path="/insights" element={page("Insights", "Understand patterns across projects, contractors, requirements, and evidence.")} /><Route path="/billing" element={page("Billing & Plan", "Manage your AGATA plan, billing status, and subscription settings.")} /><Route path="/usage" element={<UsagePage />} /><Route path="/team" element={<TeamPage />} /><Route path="/notifications" element={<NotificationsPage />} /><Route path="/audit" element={page("Audit Trail", "Track important changes and decisions across the workspace.")} /><Route path="/settings" element={<SettingsPage />} /><Route path="/documents" element={<Navigate to="/evidence" replace />} /><Route path="/alerts" element={<Navigate to="/notifications" replace />} />
+    </Route></Route>
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes></AuthProvider>;
 }
