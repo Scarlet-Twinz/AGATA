@@ -1,5 +1,30 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
+
+function resetWorkspaceScroll() {
+  const scrollingElement = document.scrollingElement;
+  const previousBehavior = document.documentElement.style.scrollBehavior;
+
+  // The global stylesheet uses smooth scrolling for the public site. Route
+  // changes in the authenticated workspace must be deterministic instead.
+  document.documentElement.style.scrollBehavior = "auto";
+
+  window.scrollTo(0, 0);
+  if (scrollingElement) {
+    scrollingElement.scrollTop = 0;
+    scrollingElement.scrollLeft = 0;
+  }
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+
+  const navigation = document.querySelector<HTMLElement>(".agata-nav");
+  if (navigation) {
+    navigation.scrollTop = 0;
+    navigation.scrollLeft = 0;
+  }
+
+  document.documentElement.style.scrollBehavior = previousBehavior;
+}
 
 export function WorkspaceScrollReset() {
   const location = useLocation();
@@ -10,30 +35,19 @@ export function WorkspaceScrollReset() {
     }
   }, []);
 
-  useEffect(() => {
-    const resetScroll = () => {
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
+  useLayoutEffect(() => {
+    resetWorkspaceScroll();
 
-      const navigation = document.querySelector<HTMLElement>(".agata-nav");
-      if (navigation) navigation.scrollTop = 0;
-    };
+    const firstFrame = window.requestAnimationFrame(() => {
+      resetWorkspaceScroll();
 
-    resetScroll();
-
-    const frame = window.requestAnimationFrame(() => {
-      resetScroll();
-      window.requestAnimationFrame(resetScroll);
+      window.requestAnimationFrame(() => {
+        resetWorkspaceScroll();
+      });
     });
 
-    const timer = window.setTimeout(resetScroll, 0);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-    };
-  }, [location.pathname]);
+    return () => window.cancelAnimationFrame(firstFrame);
+  }, [location.key]);
 
   return null;
 }
