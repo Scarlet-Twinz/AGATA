@@ -13,6 +13,7 @@ from app.api.readiness_management import router as readiness_management_router
 from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
 from app.api.rumi import router as rumi_router
+from app.api.workspace_admin import router as workspace_admin_router
 from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import entities  # noqa: F401
@@ -23,7 +24,6 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Safe for an empty development database. Production migrations will replace this.
     if settings.app_env == "development":
         Base.metadata.create_all(bind=engine)
     yield
@@ -35,7 +35,7 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"] ,
+    allow_headers=["*"],
 )
 
 app.include_router(auth_router)
@@ -47,6 +47,7 @@ app.include_router(evidence_management_router)
 app.include_router(readiness_management_router)
 app.include_router(notifications_router)
 app.include_router(rumi_router)
+app.include_router(workspace_admin_router)
 
 
 @app.get("/health", tags=["system"])
