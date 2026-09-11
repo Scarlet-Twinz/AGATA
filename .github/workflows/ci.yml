@@ -26,6 +26,8 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
     defaults:
       run:
         working-directory: backend
