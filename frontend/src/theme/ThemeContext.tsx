@@ -39,14 +39,14 @@ const lightThemeStyles = `
   html[data-theme="light"] .agata-tool-button { background: #ffffff !important; border-color: #d5e0e9 !important; color: #526a80 !important; }
   html[data-theme="light"] .agata-tool-button:hover { border-color: #aac4d8 !important; color: #1d5f91 !important; }
 
-  /* Shared light surfaces for the real workspace pages. */
   html[data-theme="light"] .agata-dashboard,
   html[data-theme="light"] .projects-page,
   html[data-theme="light"] .contractors-page,
   html[data-theme="light"] .requirements-page,
   html[data-theme="light"] .evidence-page,
   html[data-theme="light"] .readiness-page,
-  html[data-theme="light"] .notifications-page { color: #172334 !important; }
+  html[data-theme="light"] .notifications-page,
+  html[data-theme="light"] .rumi-page { color: #172334 !important; }
 
   html[data-theme="light"] .agata-panel,
   html[data-theme="light"] .projects-table,
@@ -58,7 +58,9 @@ const lightThemeStyles = `
   html[data-theme="light"] .notifications-stat,
   html[data-theme="light"] .notifications-footer,
   html[data-theme="light"] .project-detail-card,
-  html[data-theme="light"] .requirement-detail-card { background: #ffffff !important; border-color: #dce5ee !important; color: #172334 !important; }
+  html[data-theme="light"] .requirement-detail-card,
+  html[data-theme="light"] .rumi-chat-panel,
+  html[data-theme="light"] .rumi-context { background: #ffffff !important; border-color: #dce5ee !important; color: #172334 !important; }
 
   html[data-theme="light"] .agata-kpi-card { background: linear-gradient(180deg,#ffffff,#f7fafc) !important; border-color: #dce5ee !important; color: #172334 !important; }
   html[data-theme="light"] .agata-kpi-card span,
@@ -90,6 +92,29 @@ const lightThemeStyles = `
   html[data-theme="light"] .requirements-name-cell span,
   html[data-theme="light"] .evidence-main span,
   html[data-theme="light"] .readiness-identity span { color: #718196 !important; }
+
+  /* Rumi light workspace. */
+  html[data-theme="light"] .rumi-page-header h1,
+  html[data-theme="light"] .rumi-chat-head strong,
+  html[data-theme="light"] .rumi-welcome h2,
+  html[data-theme="light"] .rumi-context h2 { color: #172334 !important; }
+  html[data-theme="light"] .rumi-page-header p,
+  html[data-theme="light"] .rumi-chat-head span,
+  html[data-theme="light"] .rumi-welcome p,
+  html[data-theme="light"] .rumi-context > p,
+  html[data-theme="light"] .rumi-context-list span { color: #6d7e90 !important; }
+  html[data-theme="light"] .rumi-chat-head,
+  html[data-theme="light"] .rumi-composer { background: #f8fafc !important; border-color: #e0e7ee !important; }
+  html[data-theme="light"] .rumi-starters button,
+  html[data-theme="light"] .rumi-context-list div { background: #f8fafc !important; border-color: #dbe5ed !important; color: #50677c !important; }
+  html[data-theme="light"] .rumi-starters button:hover { background: #eef5fa !important; border-color: #c7d9e6 !important; color: #244a66 !important; }
+  html[data-theme="light"] .rumi-message-body { background: #f4f7fa !important; border-color: #dbe4ec !important; color: #2b4053 !important; }
+  html[data-theme="light"] .rumi-message.user .rumi-message-body { background: #e4f0f9 !important; border-color: #c5dceb !important; color: #194463 !important; }
+  html[data-theme="light"] .rumi-composer textarea { background: #ffffff !important; border-color: #d4e0e8 !important; color: #24394d !important; }
+  html[data-theme="light"] .rumi-composer textarea::placeholder { color: #8b9baa !important; }
+  html[data-theme="light"] .rumi-composer button { background: #e5f1f9 !important; border-color: #c3dbe9 !important; color: #18567c !important; }
+  html[data-theme="light"] .rumi-status { background: #edf8f2 !important; border-color: #cde8d8 !important; color: #26734d !important; }
+  html[data-theme="light"] .rumi-local-pill { background: #edf6fb !important; border-color: #cbdfea !important; color: #23618a !important; }
 
   html[data-theme="light"] .notifications-filters button { color: #6b7d90 !important; }
   html[data-theme="light"] .notifications-filters button.selected { background: #e9f2f9 !important; border-color: #cfdeea !important; color: #1d567f !important; }
