@@ -54,46 +54,50 @@ body {
   begins on the same horizontal line.
 */
 .agata-kpi-card > div:first-child > span {
-  display: block;
-  height: 26px;
-  margin: 0;
-  line-height: 1.2;
+  display: block !important;
+  height: 26px !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
 }
 
 /*
-  Table/list rows should align their meaningful content to the same
-  top edge instead of vertically centering badges beside two-line
-  names. This keeps Contractor, Requirement, Evidence and Readiness
-  records visually level.
+  The page components contain their own <style> blocks, which are
+  injected after this shared stylesheet. Use !important here so the
+  workspace-wide alignment rule cannot be silently overridden.
 */
 .project-row,
 .contractors-row,
 .requirements-row,
 .evidence-row,
 .readiness-row {
-  align-items: flex-start;
+  align-items: flex-start !important;
+  box-sizing: border-box;
 }
 
-.project-row {
-  padding-top: 13px;
-  padding-bottom: 13px;
-}
-
+.project-row,
 .contractors-row,
 .requirements-row,
 .evidence-row,
 .readiness-row {
-  padding-top: 13px;
-  padding-bottom: 13px;
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
 }
 
-/* Preserve the intended internal alignment of identity/name blocks. */
+/* Put every meaningful cell on the same top baseline. */
+.project-row > *,
+.contractors-row > *,
+.requirements-row > *,
+.evidence-row > *,
+.readiness-row > * {
+  align-self: flex-start !important;
+}
+
 .project-main,
 .contractors-person,
 .requirements-name-cell,
 .evidence-main,
 .readiness-identity {
-  align-items: flex-start;
+  align-items: flex-start !important;
 }
 
 .project-main > .project-icon,
@@ -101,32 +105,41 @@ body {
 .requirements-row-icon,
 .evidence-icon,
 .readiness-avatar {
-  margin-top: 1px;
+  margin-top: 1px !important;
 }
 
-/* Notifications uses the full main-column width when padding is omitted.
-   Match the other workspace pages so its panel never touches the sidebar. */
+/*
+  Notifications needs the same horizontal breathing room as the other
+  workspace pages. The page has a later inline <style> block, so these
+  declarations deliberately win over its original zero side padding.
+*/
 .notifications-page {
-  max-width: 1180px;
-  box-sizing: border-box;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 30px;
-  padding-right: 30px;
+  width: calc(100% - 60px) !important;
+  max-width: 1180px !important;
+  box-sizing: border-box !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 30px !important;
+  padding-right: 30px !important;
 }
 
-/* Keep the notification controls aligned to the top edge of their row. */
 .notifications-toolbar {
-  align-items: flex-start;
+  align-items: flex-start !important;
 }
 
 .notifications-search {
   flex: 0 1 420px;
 }
 
+.notifications-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 760px) {
   .notifications-page {
-    padding-left: 16px;
-    padding-right: 16px;
+    width: calc(100% - 32px) !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
   }
 }
