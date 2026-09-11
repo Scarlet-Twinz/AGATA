@@ -162,14 +162,14 @@ AGATA uses PostgreSQL in development and production architecture. Set `DATABASE_
 
 RUMI is intentionally separated from the HTTP API. The backend first handles deterministic questions through application services and PostgreSQL. Only questions requiring language reasoning are routed to Ollama. The Ollama adapter supports streamed responses so the frontend does not need to wait for a complete model response before displaying output.
 
-Default development configuration:
+Default development configuration for the current local setup:
 
 ```env
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=llama3.2:3b
+OLLAMA_MODEL=qwen2.5:3b-instruct
 ```
 
-Change `OLLAMA_MODEL` to the locally installed model name before running RUMI. The backend does not assume that a particular model is installed.
+Change `OLLAMA_MODEL` if the local Ollama installation uses a different model name. The backend does not assume that a particular model is installed.
 
 ## Security principles
 
