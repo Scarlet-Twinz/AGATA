@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.audit import AuditEvent
+from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
 from app.api.evidence_management import router as evidence_management_router
@@ -18,7 +20,6 @@ from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import entities  # noqa: F401
 
-
 settings = get_settings()
 
 
@@ -30,14 +31,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_router)
 app.include_router(resources_router)
 app.include_router(project_workflow_router)
@@ -48,6 +42,7 @@ app.include_router(readiness_management_router)
 app.include_router(notifications_router)
 app.include_router(rumi_router)
 app.include_router(workspace_admin_router)
+app.include_router(audit_router)
 
 
 @app.get("/health", tags=["system"])
