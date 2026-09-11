@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.audit import AuditEvent
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
