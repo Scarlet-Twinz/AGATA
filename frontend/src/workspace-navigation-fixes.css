@@ -47,3 +47,86 @@ body {
 .agata-top-avatar {
   flex-shrink: 0;
 }
+
+/*
+  Keep multi-line labels from pushing KPI values down independently.
+  The label slot has one fixed height, so every dashboard KPI value
+  begins on the same horizontal line.
+*/
+.agata-kpi-card > div:first-child > span {
+  display: block;
+  height: 26px;
+  margin: 0;
+  line-height: 1.2;
+}
+
+/*
+  Table/list rows should align their meaningful content to the same
+  top edge instead of vertically centering badges beside two-line
+  names. This keeps Contractor, Requirement, Evidence and Readiness
+  records visually level.
+*/
+.project-row,
+.contractors-row,
+.requirements-row,
+.evidence-row,
+.readiness-row {
+  align-items: flex-start;
+}
+
+.project-row {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+.contractors-row,
+.requirements-row,
+.evidence-row,
+.readiness-row {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+/* Preserve the intended internal alignment of identity/name blocks. */
+.project-main,
+.contractors-person,
+.requirements-name-cell,
+.evidence-main,
+.readiness-identity {
+  align-items: flex-start;
+}
+
+.project-main > .project-icon,
+.contractors-avatar,
+.requirements-row-icon,
+.evidence-icon,
+.readiness-avatar {
+  margin-top: 1px;
+}
+
+/* Notifications uses the full main-column width when padding is omitted.
+   Match the other workspace pages so its panel never touches the sidebar. */
+.notifications-page {
+  max-width: 1180px;
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+/* Keep the notification controls aligned to the top edge of their row. */
+.notifications-toolbar {
+  align-items: flex-start;
+}
+
+.notifications-search {
+  flex: 0 1 420px;
+}
+
+@media (max-width: 760px) {
+  .notifications-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
