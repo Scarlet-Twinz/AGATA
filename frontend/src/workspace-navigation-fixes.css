@@ -11,18 +11,27 @@ body {
 .agata-shell {
   width: 100%;
   overflow-x: clip;
+  overflow-anchor: none;
 }
 
 .agata-main,
 .agata-content {
   min-width: 0;
+  overflow-anchor: none;
 }
 
 .agata-nav {
   overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
-/* Give the left and right topbar groups the same visual box height. */
+/* The sidebar header and workspace topbar now share the same 64px rail. */
+.agata-brand {
+  height: 64px;
+  flex-basis: 64px;
+}
+
+/* Keep the two topbar groups on the same visual center line. */
 .agata-topbar-left,
 .agata-topbar-tools {
   min-height: 38px;
