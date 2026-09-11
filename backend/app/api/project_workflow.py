@@ -7,6 +7,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import ComplianceCheck, Contractor, Project, ReadinessStatus, User
 from app.schemas.domain import ReadinessResponse
+from app.services.audit import record_audit
 from app.services.readiness import calculate_readiness
 
 router = APIRouter(prefix="/api", tags=["project-workflow"])
@@ -19,21 +20,16 @@ def _company_record_or_404(db: Session, model, record_id: UUID, company_id: UUID
     return record
 
 
-@router.post(
-    "/projects/{project_id}/contractors/{contractor_id}/readiness",
-    response_model=ReadinessResponse,
-)
+@router.post("/projects/{project_id}/contractors/{contractor_id}/readiness", response_model=ReadinessResponse)
 def evaluate_project_contractor(
     project_id: UUID,
     contractor_id: UUID,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    _company_record_or_404(db, Project, project_id, user.company_id)
-    _company_record_or_404(db, Contractor, contractor_id, user.company_id)
-
+    project = _company_record_or_404(db, Project, project_id, user.company_id)
+    contractor = _company_record_or_404(db, Contractor, contractor_id, user.company_id)
     result = calculate_readiness(db, user.company_id, project_id, contractor_id)
-
     check = ComplianceCheck(
         company_id=user.company_id,
         project_id=project_id,
@@ -43,6 +39,14 @@ def evaluate_project_contractor(
         explanation=result["explanation"],
     )
     db.add(check)
+    record_audit(
+        db,
+        company_id=user.company_id,
+        user_id=user.id,
+        action="evaluate",
+        entity_type="readiness",
+        entity_id=check.id,
+        description=f"Readiness evaluated for {contractor.name} on {project.name}: {result['status'].replace('_', ' ')} ({result['score']}%).",
+    )
     db.commit()
-
     return result
