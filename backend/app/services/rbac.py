@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -121,6 +121,108 @@ def require_permission(permission_key: str) -> Callable:
         return user
 
     return dependency
+
+
+def _request_permission(request: Request) -> str | None:
+    """Map protected API operations to the least-privileged workspace permission."""
+    path = request.url.path
+    method = request.method.upper()
+
+    # Public invitation lifecycle endpoints are intentionally accessible before
+    # a user becomes a workspace member.
+    if path in {
+        "/api/workspace/invitations/preview",
+        "/api/workspace/invitations/accept",
+        "/api/workspace/invitations/accept-authenticated",
+    }:
+        return None
+
+    if path.startswith("/api/audit"):
+        return "audit.view"
+    if path.startswith("/api/workspace/team"):
+        return "team.manage" if method != "GET" else "team.view"
+    if path.startswith("/api/workspace/invitations"):
+        return "team.invite" if method in {"POST", "PATCH", "PUT", "DELETE"} else "team.view"
+    if path.startswith("/api/workspace/roles"):
+        return "team.manage"
+    if path.startswith("/api/workspace/profile"):
+        return "workspace.update" if method in {"PATCH", "PUT", "POST"} else "workspace.view"
+    if path.startswith("/api/workspace/access"):
+        return "workspace.view"
+    if path.startswith("/api/workspace/account"):
+        return "settings.manage"
+    if path.startswith("/api/dashboard"):
+        return "readiness.view"
+    if path.startswith("/api/insights") or path.startswith("/api/rumi"):
+        return "readiness.view"
+    if path.startswith("/api/notifications"):
+        return "workspace.view"
+
+    if path.startswith("/api/projects"):
+        if "/requirements" in path:
+            return "requirements.manage" if method in {"POST", "PUT", "PATCH", "DELETE"} else "requirements.view"
+        if method == "POST":
+            return "projects.create"
+        if method in {"PUT", "PATCH"}:
+            return "projects.update"
+        if method == "DELETE":
+            return "projects.delete"
+        return "projects.view"
+
+    if path.startswith("/api/contractors"):
+        if "/projects/" in path:
+            if method == "POST":
+                return "contractors.create"
+            if method == "DELETE":
+                return "contractors.update"
+            return "contractors.view"
+        if method == "POST":
+            return "contractors.create"
+        if method in {"PUT", "PATCH"}:
+            return "contractors.update"
+        return "contractors.view"
+
+    if path.startswith("/api/requirements"):
+        return "requirements.manage" if method in {"POST", "PUT", "PATCH", "DELETE"} else "requirements.view"
+
+    if path.startswith("/api/documents") or path.startswith("/api/evidence"):
+        if method == "POST":
+            return "evidence.upload"
+        if method in {"PUT", "PATCH", "DELETE"}:
+            return "evidence.review"
+        return "evidence.view"
+
+    if path.startswith("/api/readiness") or path.startswith("/api/project-workflow"):
+        if method in {"POST", "PUT", "PATCH"}:
+            return "readiness.evaluate"
+        return "readiness.view"
+
+    return None
+
+
+def enforce_request_permission(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(lambda: None),
+) -> None:
+    """Global API guard; route-specific dependencies remain the source of truth."""
+    permission_key = _request_permission(request)
+    if permission_key is None:
+        return
+
+    # Import lazily to avoid the auth -> RBAC dependency cycle.
+    from app.api.deps import get_current_user
+
+    current_user = db.scalar(select(User).where(User.id == getattr(request.state, "user_id", None))) if getattr(request.state, "user_id", None) else None
+    if current_user is None:
+        # Resolve the same bearer-token dependency used by protected routes.
+        # FastAPI cannot invoke a dependency manually here, so this guard is
+        # attached only as an additional safety layer; endpoint dependencies
+        # still enforce authenticated access.
+        return
+
+    if not has_permission(db, current_user, permission_key):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission required: {permission_key}")
 
 
 def membership_role(db: Session, user: User) -> WorkspaceRole:
