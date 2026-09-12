@@ -14,7 +14,15 @@ export default function TeamPage(){
  const [members,setMembers]=useState<Member[]>([]); const [invites,setInvites]=useState<Invite[]>([]); const [roles,setRoles]=useState<Role[]>([]); const [access,setAccess]=useState<Access|null>(null);
  const [email,setEmail]=useState(""); const [role,setRole]=useState("member"); const [error,setError]=useState(""); const [busy,setBusy]=useState(false); const [busyMember,setBusyMember]=useState("");
  const canInvite=!!access?.permissions.includes("team.invite"); const canManage=!!access?.permissions.includes("team.manage");
- const load=()=>{setError("");return Promise.all([api<Member[]>("/api/workspace/team"),api<Invite[]>("/api/workspace/invitations"),api<Role[]>("/api/workspace/roles"),api<Access>("/api/workspace/access")]).then(([m,i,r,a])=>{setMembers(m);setInvites(i);setRoles(r);setAccess(a);setError("")}).catch(e=>{setError(e instanceof Error?e.message:"Unable to load workspace access.");throw e;});};
+ const load=async()=>{setError("");try{
+   // Establish the current workspace membership/role before loading the other
+   // Team resources. Legacy workspaces may need their RBAC records created on
+   // the first access; doing this request first prevents concurrent bootstrap
+   // writes from racing each other on a fresh workspace.
+   const currentAccess=await api<Access>("/api/workspace/access");
+   const [m,i,r]=await Promise.all([api<Member[]>("/api/workspace/team"),api<Invite[]>("/api/workspace/invitations"),api<Role[]>("/api/workspace/roles")]);
+   setAccess(currentAccess); setMembers(m); setInvites(i); setRoles(r); setError("");
+ }catch(e){setError(e instanceof Error?e.message:"Unable to load workspace access.");throw e;}};
  useEffect(()=>{load().catch(()=>undefined)},[]);
  async function invite(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{await api("/api/workspace/invitations",{method:"POST",body:JSON.stringify({email,role})});setEmail("");await load()}catch(e){setError(e instanceof Error?e.message:"Unable to send invitation.")}finally{setBusy(false)}}
  async function resend(id:string){setBusyMember(id);setError("");try{await api(`/api/workspace/invitations/${id}/resend`,{method:"POST"});await load()}catch(e){setError(e instanceof Error?e.message:"Unable to resend invitation.")}finally{setBusyMember("")}}
