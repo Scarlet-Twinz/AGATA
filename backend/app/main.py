@@ -8,7 +8,6 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
 from app.api.dashboard_consistency import router as dashboard_consistency_router
-from app.api.deps import enforce_request_permission
 from app.api.evidence_management import router as evidence_management_router
 from app.api.insights import router as insights_router
 from app.api.notifications import router as notifications_router
@@ -24,6 +23,7 @@ from app.db.session import Base, engine
 from app.models import auth_security  # noqa: F401
 from app.models import entities  # noqa: F401
 from app.models import workspace  # noqa: F401
+from app.services.rbac import enforce_request_permission
 
 settings = get_settings()
 
