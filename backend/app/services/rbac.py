@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import User
 from app.models.workspace import WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
@@ -37,56 +38,29 @@ PERMISSIONS: dict[str, str] = {
 }
 
 ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
-    "owner": (
-        "Owner",
-        "Full workspace control",
-        set(PERMISSIONS),
-    ),
-    "admin": (
-        "Admin",
-        "Workspace administration and operational control",
-        set(PERMISSIONS) - {"billing.view"},
-    ),
+    "owner": ("Owner", "Full workspace control", set(PERMISSIONS)),
+    "admin": ("Admin", "Workspace administration and operational control", set(PERMISSIONS) - {"billing.view"}),
     "compliance_manager": (
-        "Compliance Manager",
-        "Manage compliance evidence and readiness operations",
-        {
-            "workspace.view", "team.view", "projects.view", "projects.update",
-            "contractors.view", "contractors.update", "requirements.view", "requirements.manage",
-            "evidence.view", "evidence.upload", "evidence.review", "readiness.view",
-            "readiness.evaluate", "readiness.approve", "audit.view", "settings.view",
-        },
+        "Compliance Manager", "Manage compliance evidence and readiness operations",
+        {"workspace.view", "team.view", "projects.view", "projects.update", "contractors.view", "contractors.update", "requirements.view", "requirements.manage", "evidence.view", "evidence.upload", "evidence.review", "readiness.view", "readiness.evaluate", "readiness.approve", "audit.view", "settings.view"},
     ),
     "project_manager": (
-        "Project Manager",
-        "Manage project and contractor readiness operations",
-        {
-            "workspace.view", "team.view", "projects.view", "projects.create", "projects.update",
-            "contractors.view", "contractors.create", "contractors.update", "requirements.view",
-            "evidence.view", "evidence.upload", "readiness.view", "readiness.evaluate", "audit.view",
-        },
+        "Project Manager", "Manage project and contractor readiness operations",
+        {"workspace.view", "team.view", "projects.view", "projects.create", "projects.update", "contractors.view", "contractors.create", "contractors.update", "requirements.view", "evidence.view", "evidence.upload", "readiness.view", "readiness.evaluate", "audit.view"},
     ),
     "reviewer": (
-        "Reviewer",
-        "Review evidence and readiness decisions",
-        {
-            "workspace.view", "team.view", "projects.view", "contractors.view", "requirements.view",
-            "evidence.view", "evidence.review", "readiness.view", "readiness.evaluate", "audit.view",
-        },
+        "Reviewer", "Review evidence and readiness decisions",
+        {"workspace.view", "team.view", "projects.view", "contractors.view", "requirements.view", "evidence.view", "evidence.review", "readiness.view", "readiness.evaluate", "audit.view"},
     ),
     "member": (
-        "Member",
-        "Standard workspace access",
-        {
-            "workspace.view", "team.view", "projects.view", "contractors.view", "requirements.view",
-            "evidence.view", "readiness.view", "settings.view",
-        },
+        "Member", "Standard workspace access",
+        {"workspace.view", "team.view", "projects.view", "contractors.view", "requirements.view", "evidence.view", "readiness.view", "settings.view"},
     ),
 }
 
 
 def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> WorkspaceMembership:
-    """Ensure a legacy/new user has a persistent workspace membership and roles exist."""
+    """Create the system roles/permissions and migrate a legacy user into Owner access."""
     permissions_by_key: dict[str, WorkspacePermission] = {}
     for key, description in PERMISSIONS.items():
         permission = db.scalar(select(WorkspacePermission).where(WorkspacePermission.key == key))
@@ -104,20 +78,13 @@ def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> 
             db.add(role)
             db.flush()
         roles[key] = role
-        existing_permission_ids = set(
-            db.scalars(select(WorkspaceRolePermission.permission_id).where(WorkspaceRolePermission.role_id == role.id)).all()
-        )
+        existing_permission_ids = set(db.scalars(select(WorkspaceRolePermission.permission_id).where(WorkspaceRolePermission.role_id == role.id)).all())
         for permission_key in permission_keys:
             permission = permissions_by_key[permission_key]
             if permission.id not in existing_permission_ids:
                 db.add(WorkspaceRolePermission(role_id=role.id, permission_id=permission.id))
 
-    membership = db.scalar(
-        select(WorkspaceMembership).where(
-            WorkspaceMembership.company_id == user.company_id,
-            WorkspaceMembership.user_id == user.id,
-        )
-    )
+    membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == user.id))
     if membership is None:
         membership = WorkspaceMembership(company_id=user.company_id, user_id=user.id, role_id=roles["owner"].id, status="active")
         db.add(membership)
@@ -130,12 +97,7 @@ def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> 
 
 
 def get_membership(db: Session, user: User) -> WorkspaceMembership:
-    membership = db.scalar(
-        select(WorkspaceMembership).where(
-            WorkspaceMembership.company_id == user.company_id,
-            WorkspaceMembership.user_id == user.id,
-        )
-    )
+    membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == user.id))
     if membership is None:
         membership = ensure_workspace_access(db, user)
     if membership.status != "active":
@@ -148,23 +110,14 @@ def has_permission(db: Session, user: User, permission_key: str) -> bool:
     permission = db.scalar(select(WorkspacePermission).where(WorkspacePermission.key == permission_key))
     if permission is None:
         return False
-    return db.scalar(
-        select(WorkspaceRolePermission.id).where(
-            WorkspaceRolePermission.role_id == membership.role_id,
-            WorkspaceRolePermission.permission_id == permission.id,
-        )
-    ) is not None
+    return db.scalar(select(WorkspaceRolePermission.id).where(WorkspaceRolePermission.role_id == membership.role_id, WorkspaceRolePermission.permission_id == permission.id)) is not None
 
 
 def require_permission(permission_key: str) -> Callable:
-    def dependency(
-        db: Session = Depends(get_db),
-    ) -> User:
-        from app.api.deps import get_current_user
-
-        # Resolve the authentication dependency lazily to keep the RBAC service
-        # independent from the authentication module at import time.
-        raise NotImplementedError
+    def dependency(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> User:
+        if not has_permission(db, user, permission_key):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission required: {permission_key}")
+        return user
 
     return dependency
 
@@ -177,12 +130,4 @@ def membership_role(db: Session, user: User) -> WorkspaceRole:
     return role
 
 
-__all__ = [
-    "PERMISSIONS",
-    "ROLE_DEFINITIONS",
-    "ensure_workspace_access",
-    "get_membership",
-    "has_permission",
-    "membership_role",
-    "require_permission",
-]
+__all__ = ["PERMISSIONS", "ROLE_DEFINITIONS", "ensure_workspace_access", "get_membership", "has_permission", "membership_role", "require_permission"]
