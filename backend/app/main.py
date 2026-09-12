@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -8,6 +8,7 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
 from app.api.dashboard_consistency import router as dashboard_consistency_router
+from app.api.deps import enforce_request_permission
 from app.api.evidence_management import router as evidence_management_router
 from app.api.insights import router as insights_router
 from app.api.notifications import router as notifications_router
@@ -35,8 +36,6 @@ def ensure_development_schema() -> None:
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS token_hash VARCHAR(64)"))
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ"))
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ"))
-        # Secure invitations do not persist raw tokens. Older local databases
-        # may still have the legacy token column marked NOT NULL.
         connection.execute(text("ALTER TABLE workspace_invitations ALTER COLUMN token DROP NOT NULL"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_workspace_invitations_token_hash ON workspace_invitations (token_hash) WHERE token_hash IS NOT NULL"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_invitations_expires_at ON workspace_invitations (expires_at)"))
@@ -50,7 +49,12 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    lifespan=lifespan,
+    dependencies=[Depends(enforce_request_permission)],
+)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_router)
 app.include_router(dashboard_consistency_router)
