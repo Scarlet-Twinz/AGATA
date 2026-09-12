@@ -1,7 +1,8 @@
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -19,6 +20,7 @@ from app.models.entities import (
     Requirement,
     User,
 )
+from app.models.rumi import RumiConversation, RumiMessageRecord
 from app.services.readiness import calculate_readiness
 from app.services.rumi import stream_rumi
 
@@ -31,7 +33,22 @@ class RumiMessage(BaseModel):
 
 
 class RumiRequest(BaseModel):
+    conversation_id: UUID | None = None
     messages: list[RumiMessage] = Field(min_length=1, max_length=20)
+
+
+class ConversationResponse(BaseModel):
+    id: UUID
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MessageResponse(BaseModel):
+    id: UUID
+    role: str
+    content: str
+    created_at: datetime
 
 
 def _workspace_context(db: Session, company_id) -> str:
@@ -119,8 +136,59 @@ def _workspace_context(db: Session, company_id) -> str:
     return "\n".join(lines)
 
 
+def _get_or_create_conversation(db: Session, user: User, conversation_id: UUID | None) -> RumiConversation:
+    if conversation_id is not None:
+        conversation = db.scalar(select(RumiConversation).where(RumiConversation.id == conversation_id, RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id))
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Rumi conversation not found")
+        return conversation
+    conversation = db.scalar(
+        select(RumiConversation)
+        .where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id)
+        .order_by(RumiConversation.updated_at.desc())
+    )
+    if conversation is None:
+        conversation = RumiConversation(user_id=user.id, company_id=user.company_id, title="Rumi conversation")
+        db.add(conversation)
+        db.flush()
+    return conversation
+
+
+@router.get("/conversations/current", response_model=ConversationResponse)
+def current_conversation(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ConversationResponse:
+    conversation = _get_or_create_conversation(db, user, None)
+    db.commit()
+    return ConversationResponse.model_validate(conversation)
+
+
+@router.get("/conversations", response_model=list[ConversationResponse])
+def conversations(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[ConversationResponse]:
+    items = db.scalars(
+        select(RumiConversation)
+        .where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id)
+        .order_by(RumiConversation.updated_at.desc())
+    ).all()
+    return [ConversationResponse.model_validate(item) for item in items]
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
+def conversation_messages(conversation_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[MessageResponse]:
+    conversation = _get_or_create_conversation(db, user, conversation_id)
+    items = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
+    return [MessageResponse.model_validate(item) for item in items]
+
+
 @router.post("/chat")
 async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> StreamingResponse:
+    conversation = _get_or_create_conversation(db, user, payload.conversation_id)
+    prior = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
+    incoming = [message.model_dump() for message in payload.messages]
+    last_user = next((message for message in reversed(incoming) if message["role"] == "user"), None)
+    if last_user and (not prior or prior[-1].content != last_user["content"] or prior[-1].role != "user"):
+        db.add(RumiMessageRecord(conversation_id=conversation.id, role="user", content=last_user["content"]))
+        db.commit()
+
+    history = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
     context = _workspace_context(db, user.company_id)
     system = {
         "role": "system",
@@ -139,10 +207,21 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
             + context
         ),
     }
-    messages = [system, *[message.model_dump() for message in payload.messages]]
+    messages = [system, *[{"role": item.role, "content": item.content} for item in history]]
 
     async def body() -> AsyncIterator[str]:
-        async for token in stream_rumi(messages):
-            yield token
+        chunks: list[str] = []
+        try:
+            async for token in stream_rumi(messages):
+                chunks.append(token)
+                yield token
+        finally:
+            answer = "".join(chunks).strip()
+            if answer:
+                db.add(RumiMessageRecord(conversation_id=conversation.id, role="assistant", content=answer))
+                conversation.updated_at = datetime.now(timezone.utc)
+                if conversation.title == "Rumi conversation" and last_user:
+                    conversation.title = last_user["content"][:160]
+                db.commit()
 
     return StreamingResponse(body(), media_type="text/plain; charset=utf-8", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
