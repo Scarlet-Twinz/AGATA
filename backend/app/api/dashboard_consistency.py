@@ -132,6 +132,18 @@ def dashboard(
         if key in trend_buckets:
             readiness_trend.append(DashboardTrendPoint(month=datetime(year, month, 1).strftime("%b"), score=round(sum(trend_buckets[key]) / len(trend_buckets[key]))))
 
+    # A workspace can have several real readiness checks before it has
+    # accumulated two calendar months of history. In that case, expose the
+    # first and latest real check as a readiness-movement view instead of
+    # leaving the chart visually empty. No synthetic score is introduced.
+    if len(readiness_trend) < 2 and len(trend_checks) >= 2:
+        first_check = trend_checks[0]
+        latest_check = trend_checks[-1]
+        readiness_trend = [
+            DashboardTrendPoint(month="Start", score=first_check.score),
+            DashboardTrendPoint(month="Now", score=latest_check.score),
+        ]
+
     return data.model_copy(update={
         "readiness_score": readiness_score,
         "ready_count": ready_count,
