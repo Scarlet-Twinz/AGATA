@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.models.entities import Company, Contractor, Document, Project, Requirement, User
 from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspaceRole
 from app.services.audit import record_audit
-from app.services.rbac import get_membership, membership_role, require_permission
+from app.services.rbac import get_membership, require_permission
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -93,7 +93,9 @@ def workspace_team(db: Session = Depends(get_db), user: User = Depends(require_p
     users = db.scalars(select(User).where(User.company_id == user.company_id).order_by(User.full_name.asc())).all()
     result = []
     for item in users:
-        membership = get_membership(db, item)
+        membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == item.id))
+        if membership is None:
+            membership = get_membership(db, item)
         role = db.get(WorkspaceRole, membership.role_id)
         result.append({
             "id": str(item.id),
@@ -155,7 +157,9 @@ def update_member_role(user_id: UUID, payload: RoleUpdate, db: Session = Depends
     target = db.scalar(select(User).where(User.id == user_id, User.company_id == user.company_id))
     if not target:
         raise HTTPException(status_code=404, detail="Workspace member not found")
-    target_membership = get_membership(db, target)
+    target_membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == target.id))
+    if not target_membership:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
     current_role = db.get(WorkspaceRole, target_membership.role_id)
     if current_role and current_role.key == "owner":
         raise HTTPException(status_code=403, detail="The workspace owner cannot be reassigned")
@@ -177,7 +181,9 @@ def suspend_member(user_id: UUID, db: Session = Depends(get_db), user: User = De
     target = db.scalar(select(User).where(User.id == user_id, User.company_id == user.company_id))
     if not target:
         raise HTTPException(status_code=404, detail="Workspace member not found")
-    membership = get_membership(db, target)
+    membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == target.id))
+    if not membership:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
     role = db.get(WorkspaceRole, membership.role_id)
     if role and role.key == "owner":
         raise HTTPException(status_code=403, detail="The workspace owner cannot be suspended")
