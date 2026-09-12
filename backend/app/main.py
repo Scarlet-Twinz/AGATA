@@ -27,15 +27,17 @@ from app.models import workspace  # noqa: F401
 settings = get_settings()
 
 
-
 def ensure_development_schema() -> None:
-    """Apply additive local-only schema changes not handled by create_all."""
+    """Apply local schema compatibility changes not handled by create_all."""
     if settings.app_env != "development":
         return
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS token_hash VARCHAR(64)"))
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ"))
         connection.execute(text("ALTER TABLE workspace_invitations ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ"))
+        # Secure invitations do not persist raw tokens. Older local databases
+        # may still have the legacy token column marked NOT NULL.
+        connection.execute(text("ALTER TABLE workspace_invitations ALTER COLUMN token DROP NOT NULL"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_workspace_invitations_token_hash ON workspace_invitations (token_hash) WHERE token_hash IS NOT NULL"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_invitations_expires_at ON workspace_invitations (expires_at)"))
 
