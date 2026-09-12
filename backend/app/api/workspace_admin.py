@@ -10,7 +10,7 @@ from app.api.deps import get_current_user
 from app.core.security import verify_password
 from app.db.session import get_db
 from app.models.entities import Company, Contractor, Document, Project, Requirement, User
-from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspaceRole
+from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
 from app.services.audit import record_audit
 from app.services.rbac import get_membership, has_permission, require_permission
 
@@ -115,12 +115,13 @@ def workspace_roles(db: Session = Depends(get_db), user: User = Depends(require_
 def workspace_access(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     membership = get_membership(db, user)
     role = db.get(WorkspaceRole, membership.role_id)
-    return {
-        "role": role.key if role else "unknown",
-        "role_name": role.name if role else "Unknown",
-        "status": membership.status,
-        "permissions": [key for key in (awaitable := [])],
-    }
+    permissions = db.scalars(
+        select(WorkspacePermission.key)
+        .join(WorkspaceRolePermission, WorkspaceRolePermission.permission_id == WorkspacePermission.id)
+        .where(WorkspaceRolePermission.role_id == membership.role_id)
+        .order_by(WorkspacePermission.key.asc())
+    ).all()
+    return {"role": role.key if role else "unknown", "role_name": role.name if role else "Unknown", "status": membership.status, "permissions": permissions}
 
 
 @router.get("/invitations")
