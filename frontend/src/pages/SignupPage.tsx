@@ -12,6 +12,7 @@ export function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && user) return <Navigate to="/dashboard" replace />;
@@ -19,6 +20,7 @@ export function SignupPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccess("");
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -29,8 +31,9 @@ export function SignupPage() {
     }
     setSubmitting(true);
     try {
-      await signUp(companyName.trim(), fullName.trim(), email.trim(), password, acceptedTerms);
-      navigate("/dashboard", { replace: true });
+      const message = await signUp(companyName.trim(), fullName.trim(), email.trim(), password, acceptedTerms);
+      setSuccess(message);
+      window.setTimeout(() => navigate(`/login?email=${encodeURIComponent(email.trim())}`, { replace: true }), 1200);
     } catch (err) {
       let message = "Unable to create your workspace. Please try again.";
       if (err instanceof Error) {
@@ -63,6 +66,7 @@ export function SignupPage() {
           <label>Confirm password<input type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat your password" required /></label>
           <label className="auth-checkbox auth-field-full"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required /><span>I agree to the <Link to="/terms" target="_blank">Terms</Link> and acknowledge the <Link to="/privacy" target="_blank">Privacy Policy</Link>.</span></label>
           {error && <div className="auth-error auth-field-full" role="alert">{error}</div>}
+          {success && <div className="auth-success auth-field-full" role="status">{success} Check your inbox, then sign in after verification.</div>}
           <button className="primary-button auth-submit auth-field-full" type="submit" disabled={submitting}>{submitting ? "Creating workspace…" : "Create workspace"}<span>→</span></button>
         </form>
         <p className="auth-switch">Already have an AGATA account? <Link to="/login">Sign in</Link></p>
