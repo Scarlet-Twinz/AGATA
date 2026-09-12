@@ -59,7 +59,6 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
 
 
 def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> WorkspaceMembership:
-    """Create system roles/permissions and migrate a legacy user into Owner access."""
     permissions_by_key: dict[str, WorkspacePermission] = {}
     for key, description in PERMISSIONS.items():
         permission = db.scalar(select(WorkspacePermission).where(WorkspacePermission.key == key))
@@ -124,19 +123,10 @@ def require_permission(permission_key: str) -> Callable:
 
 
 def _request_permission(request: Request) -> str | None:
-    """Map protected API operations to the least-privileged workspace permission."""
     path = request.url.path
     method = request.method.upper()
-
-    # Public invitation lifecycle endpoints are intentionally accessible before
-    # a user becomes a workspace member.
-    if path in {
-        "/api/workspace/invitations/preview",
-        "/api/workspace/invitations/accept",
-        "/api/workspace/invitations/accept-authenticated",
-    }:
+    if path in {"/api/workspace/invitations/preview", "/api/workspace/invitations/accept", "/api/workspace/invitations/accept-authenticated"}:
         return None
-
     if path.startswith("/api/audit"):
         return "audit.view"
     if path.startswith("/api/workspace/team"):
@@ -157,71 +147,52 @@ def _request_permission(request: Request) -> str | None:
         return "readiness.view"
     if path.startswith("/api/notifications"):
         return "workspace.view"
-
     if path.startswith("/api/projects"):
         if "/requirements" in path:
             return "requirements.manage" if method in {"POST", "PUT", "PATCH", "DELETE"} else "requirements.view"
-        if method == "POST":
-            return "projects.create"
-        if method in {"PUT", "PATCH"}:
-            return "projects.update"
-        if method == "DELETE":
-            return "projects.delete"
+        if method == "POST": return "projects.create"
+        if method in {"PUT", "PATCH"}: return "projects.update"
+        if method == "DELETE": return "projects.delete"
         return "projects.view"
-
     if path.startswith("/api/contractors"):
         if "/projects/" in path:
-            if method == "POST":
-                return "contractors.create"
-            if method == "DELETE":
-                return "contractors.update"
+            if method == "POST": return "contractors.create"
+            if method == "DELETE": return "contractors.update"
             return "contractors.view"
-        if method == "POST":
-            return "contractors.create"
-        if method in {"PUT", "PATCH"}:
-            return "contractors.update"
+        if method == "POST": return "contractors.create"
+        if method in {"PUT", "PATCH"}: return "contractors.update"
         return "contractors.view"
-
     if path.startswith("/api/requirements"):
         return "requirements.manage" if method in {"POST", "PUT", "PATCH", "DELETE"} else "requirements.view"
-
     if path.startswith("/api/documents") or path.startswith("/api/evidence"):
-        if method == "POST":
-            return "evidence.upload"
-        if method in {"PUT", "PATCH", "DELETE"}:
-            return "evidence.review"
+        if method == "POST": return "evidence.upload"
+        if method in {"PUT", "PATCH", "DELETE"}: return "evidence.review"
         return "evidence.view"
-
     if path.startswith("/api/readiness") or path.startswith("/api/project-workflow"):
-        if method in {"POST", "PUT", "PATCH"}:
-            return "readiness.evaluate"
+        if method in {"POST", "PUT", "PATCH"}: return "readiness.evaluate"
         return "readiness.view"
-
     return None
 
 
 def enforce_request_permission(
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(lambda: None),
 ) -> None:
-    """Global API guard; route-specific dependencies remain the source of truth."""
     permission_key = _request_permission(request)
     if permission_key is None:
         return
-
-    # Import lazily to avoid the auth -> RBAC dependency cycle.
-    from app.api.deps import get_current_user
-
-    current_user = db.scalar(select(User).where(User.id == getattr(request.state, "user_id", None))) if getattr(request.state, "user_id", None) else None
-    if current_user is None:
-        # Resolve the same bearer-token dependency used by protected routes.
-        # FastAPI cannot invoke a dependency manually here, so this guard is
-        # attached only as an additional safety layer; endpoint dependencies
-        # still enforce authenticated access.
-        return
-
-    if not has_permission(db, current_user, permission_key):
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    try:
+        from app.core.security import decode_access_token
+        user_id, company_id = decode_access_token(auth_header.split(" ", 1)[1].strip())
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+    user = db.get(User, user_id)
+    if not user or user.company_id != company_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+    if not has_permission(db, user, permission_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission required: {permission_key}")
 
 
@@ -233,4 +204,4 @@ def membership_role(db: Session, user: User) -> WorkspaceRole:
     return role
 
 
-__all__ = ["PERMISSIONS", "ROLE_DEFINITIONS", "ensure_workspace_access", "get_membership", "has_permission", "membership_role", "require_permission"]
+__all__ = ["PERMISSIONS", "ROLE_DEFINITIONS", "ensure_workspace_access", "get_membership", "has_permission", "membership_role", "require_permission", "enforce_request_permission"]
