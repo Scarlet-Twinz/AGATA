@@ -22,6 +22,7 @@ from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import auth_security  # noqa: F401
 from app.models import entities  # noqa: F401
+from app.models import rumi  # noqa: F401
 from app.models import workspace  # noqa: F401
 from app.services.rbac import enforce_request_permission
 
@@ -39,7 +40,7 @@ def ensure_development_schema() -> None:
         connection.execute(text("ALTER TABLE workspace_invitations ALTER COLUMN token DROP NOT NULL"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_workspace_invitations_token_hash ON workspace_invitations (token_hash) WHERE token_hash IS NOT NULL"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_invitations_expires_at ON workspace_invitations (expires_at)"))
-
+    
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
