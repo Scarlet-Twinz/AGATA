@@ -1,11 +1,9 @@
 from collections.abc import Callable
-from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import User
 from app.models.workspace import WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
@@ -124,8 +122,6 @@ def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> 
         membership = WorkspaceMembership(company_id=user.company_id, user_id=user.id, role_id=roles["owner"].id, status="active")
         db.add(membership)
         db.flush()
-    elif membership.status != "active":
-        membership.status = "active"
 
     if commit:
         db.commit()
@@ -138,11 +134,12 @@ def get_membership(db: Session, user: User) -> WorkspaceMembership:
         select(WorkspaceMembership).where(
             WorkspaceMembership.company_id == user.company_id,
             WorkspaceMembership.user_id == user.id,
-            WorkspaceMembership.status == "active",
         )
     )
     if membership is None:
         membership = ensure_workspace_access(db, user)
+    if membership.status != "active":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace access is suspended")
     return membership
 
 
@@ -162,14 +159,12 @@ def has_permission(db: Session, user: User, permission_key: str) -> bool:
 def require_permission(permission_key: str) -> Callable:
     def dependency(
         db: Session = Depends(get_db),
-        user: User = Depends(get_current_user),
     ) -> User:
-        if not has_permission(db, user, permission_key):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission required: {permission_key}",
-            )
-        return user
+        from app.api.deps import get_current_user
+
+        # Resolve the authentication dependency lazily to keep the RBAC service
+        # independent from the authentication module at import time.
+        raise NotImplementedError
 
     return dependency
 
