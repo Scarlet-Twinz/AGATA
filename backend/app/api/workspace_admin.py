@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -12,6 +12,8 @@ from app.db.session import get_db
 from app.models.entities import Company, Contractor, Document, Project, Requirement, User
 from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
 from app.services.audit import record_audit
+from app.services.email import EmailDeliveryError
+from app.services.invitations import issue_invitation, send_invitation_email
 from app.services.rbac import get_membership, require_permission
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
@@ -119,23 +121,54 @@ def workspace_access(db: Session = Depends(get_db), user: User = Depends(get_cur
 @router.get("/invitations")
 def list_invitations(db: Session = Depends(get_db), user: User = Depends(require_permission("team.view"))):
     rows = db.scalars(select(WorkspaceInvitation).where(WorkspaceInvitation.company_id == user.company_id).order_by(WorkspaceInvitation.created_at.desc())).all()
-    return [{"id": str(x.id), "email": x.email, "role": x.role, "status": x.status, "created_at": x.created_at} for x in rows]
+    return [{"id": str(x.id), "email": x.email, "role": x.role, "status": x.status, "created_at": x.created_at, "expires_at": x.expires_at, "accepted_at": x.accepted_at} for x in rows]
 
 
 @router.post("/invitations", status_code=201)
-def create_invitation(payload: InvitationCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("team.invite"))):
+async def create_invitation(payload: InvitationCreate, db: Session = Depends(get_db), user: User = Depends(require_permission("team.invite"))):
     existing_user = db.scalar(select(User).where(User.company_id == user.company_id, User.email == payload.email))
     if existing_user:
         raise HTTPException(status_code=409, detail="That email already has access to this workspace")
     pending = db.scalar(select(WorkspaceInvitation).where(WorkspaceInvitation.company_id == user.company_id, WorkspaceInvitation.email == payload.email, WorkspaceInvitation.status == "pending"))
     if pending:
         raise HTTPException(status_code=409, detail="An invitation is already pending for that email")
-    item = WorkspaceInvitation(company_id=user.company_id, email=payload.email, role=payload.role, token=str(uuid4()), status="pending")
-    db.add(item)
+
+    company = db.scalar(select(Company).where(Company.id == user.company_id))
+    item, raw_token = issue_invitation(db, company_id=user.company_id, email=payload.email, role=payload.role)
     record_audit(db, company_id=user.company_id, user_id=user.id, action="invitation.created", entity_type="invitation", entity_id=item.id, description=f"Created a {payload.role} workspace invitation for {payload.email}.")
     db.commit()
     db.refresh(item)
-    return {"id": str(item.id), "email": item.email, "role": item.role, "status": item.status, "created_at": item.created_at}
+
+    try:
+        await send_invitation_email(email=item.email, role=item.role, company_name=company.name if company else "your AGATA workspace", raw_token=raw_token)
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=503, detail="Invitation created, but AGATA could not deliver the invitation email. You can retry with Resend once email delivery is configured.") from exc
+
+    return {"id": str(item.id), "email": item.email, "role": item.role, "status": item.status, "created_at": item.created_at, "expires_at": item.expires_at}
+
+
+@router.post("/invitations/{invitation_id}/resend")
+async def resend_invitation(invitation_id: UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("team.manage"))):
+    item = db.scalar(select(WorkspaceInvitation).where(WorkspaceInvitation.id == invitation_id, WorkspaceInvitation.company_id == user.company_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    if item.status != "pending":
+        raise HTTPException(status_code=409, detail="Only pending invitations can be resent")
+
+    company = db.scalar(select(Company).where(Company.id == user.company_id))
+    _, raw_token = issue_invitation(db, company_id=user.company_id, email=item.email, role=item.role)
+    item.status = "pending"
+    item.revoked_at = None
+    record_audit(db, company_id=user.company_id, user_id=user.id, action="invitation.resent", entity_type="invitation", entity_id=item.id, description=f"Resent the workspace invitation to {item.email}.")
+    db.commit()
+
+    try:
+        await send_invitation_email(email=item.email, role=item.role, company_name=company.name if company else "your AGATA workspace", raw_token=raw_token)
+    except EmailDeliveryError as exc:
+        raise HTTPException(status_code=503, detail="AGATA could not deliver the invitation email right now.") from exc
+
+    db.refresh(item)
+    return {"id": str(item.id), "status": item.status, "expires_at": item.expires_at}
 
 
 @router.post("/invitations/{invitation_id}/revoke")
@@ -147,6 +180,8 @@ def revoke_invitation(invitation_id: UUID, db: Session = Depends(get_db), user: 
         raise HTTPException(status_code=409, detail="Only pending invitations can be revoked")
     item.status = "revoked"
     item.revoked_at = datetime.now(timezone.utc)
+    item.token = None
+    item.token_hash = None
     record_audit(db, company_id=user.company_id, user_id=user.id, action="invitation.revoked", entity_type="invitation", entity_id=item.id, description=f"Revoked the workspace invitation for {item.email}.")
     db.commit()
     return {"id": str(item.id), "status": item.status}
