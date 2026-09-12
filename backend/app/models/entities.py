@@ -141,4 +141,4 @@ class AuditEvent(Base):
     entity_type: Mapped[str] = mapped_column(String(80), index=True)
     entity_id: Mapped[UUID | None] = mapped_column(nullable=True, index=True)
     description: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now(), index=True)
