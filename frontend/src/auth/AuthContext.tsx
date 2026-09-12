@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, setAccessToken } from "../lib/api";
 
 type User = {
@@ -13,6 +13,7 @@ type AuthContextValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (companyName: string, fullName: string, email: string, password: string, acceptedTerms: boolean) => Promise<void>;
+  refreshUser: () => Promise<User | null>;
   signOut: () => void;
 };
 
@@ -45,10 +46,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      setUser(null);
+      return null;
+    }
+
+    const nextUser = await loadUser(token);
+    setUser(nextUser);
+    return nextUser;
+  }, []);
+
   const value = useMemo<AuthContextValue>(() => ({
     user,
     loading,
-    async signIn(email, password) {
+    signIn: async (email, password) => {
       const result = await api<{ access_token: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
@@ -56,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(TOKEN_KEY, result.access_token);
       setUser(await loadUser(result.access_token));
     },
-    async signUp(companyName, fullName, email, password, acceptedTerms) {
+    signUp: async (companyName, fullName, email, password, acceptedTerms) => {
       const result = await api<{ access_token: string }>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({
@@ -70,12 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(TOKEN_KEY, result.access_token);
       setUser(await loadUser(result.access_token));
     },
+    refreshUser,
     signOut() {
       localStorage.removeItem(TOKEN_KEY);
       setAccessToken(null);
       setUser(null);
     },
-  }), [user, loading]);
+  }), [user, loading, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
