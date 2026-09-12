@@ -11,13 +11,14 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const redirect = searchParams.get("redirect") || (location.state as { from?: string } | null)?.from || "/dashboard";
 
   useEffect(() => {
     const emailFromQuery = searchParams.get("email");
     if (emailFromQuery) setEmail(emailFromQuery);
   }, [searchParams]);
 
-  if (!loading && user) return <Navigate to="/dashboard" replace />;
+  if (!loading && user) return <Navigate to={redirect} replace />;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,8 +26,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
-      const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
-      navigate(from, { replace: true });
+      navigate(redirect, { replace: true });
     } catch (err) {
       let message = "Unable to sign in. Please try again.";
       if (err instanceof Error) {
