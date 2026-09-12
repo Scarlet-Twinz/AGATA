@@ -12,7 +12,7 @@ type AuthContextValue = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (companyName: string, fullName: string, email: string, password: string, acceptedTerms: boolean) => Promise<void>;
+  signUp: (companyName: string, fullName: string, email: string, password: string, acceptedTerms: boolean) => Promise<string>;
   refreshUser: () => Promise<User | null>;
   signOut: () => void;
 };
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(await loadUser(result.access_token));
     },
     signUp: async (companyName, fullName, email, password, acceptedTerms) => {
-      const result = await api<{ access_token: string }>("/auth/signup", {
+      const result = await api<{ message: string }>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({
           company_name: companyName,
@@ -80,8 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accepted_terms: acceptedTerms,
         }),
       });
-      localStorage.setItem(TOKEN_KEY, result.access_token);
-      setUser(await loadUser(result.access_token));
+      return result.message;
     },
     refreshUser,
     signOut() {
