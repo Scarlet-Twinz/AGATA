@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -79,15 +79,15 @@ def _computed_state(document: Document, intelligence: EvidenceIntelligence, mapp
         return "rejected"
     if intelligence.verification_status != "verified":
         return "unverified"
+    now = datetime.now(timezone.utc)
     if document.expires_at is not None:
-        now = datetime.now(timezone.utc)
         if document.expires_at <= now:
             return "expired"
-        if document.expires_at <= now.replace() + __import__("datetime").timedelta(days=30):
+        if document.expires_at <= now + timedelta(days=30):
             return "expiring"
     if not mapped:
         return "unmapped"
-    if intelligence.review_status not in {"approved"}:
+    if intelligence.review_status != "approved":
         return "requires_review"
     return "valid"
 
@@ -137,7 +137,8 @@ def update_evidence_intelligence(
             raise HTTPException(status_code=404, detail="Evidence owner not found in this workspace")
 
     intelligence = _record(db, document.id)
-    old_state = _computed_state(document, intelligence, db.scalar(select(DocumentRequirementMatch.id).where(DocumentRequirementMatch.document_id == document.id)) is not None)
+    mapped = db.scalar(select(DocumentRequirementMatch.id).where(DocumentRequirementMatch.document_id == document.id)) is not None
+    old_state = _computed_state(document, intelligence, mapped)
     for key, value in values.items():
         if key == "rejection_reason" and isinstance(value, str):
             value = value.strip() or None
