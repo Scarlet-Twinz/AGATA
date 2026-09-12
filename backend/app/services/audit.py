@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -22,6 +23,9 @@ def record_audit(
         entity_type=entity_type,
         entity_id=entity_id,
         description=description,
+        # Keep audit writes safe against existing databases whose column
+        # default predates the current SQLAlchemy model.
+        created_at=datetime.now(timezone.utc),
     )
     db.add(event)
     return event
