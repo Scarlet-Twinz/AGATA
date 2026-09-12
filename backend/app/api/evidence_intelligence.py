@@ -8,8 +8,19 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.entities import AuditEvent, Document, DocumentRequirementMatch, User
+from app.models.entities import (
+    AuditEvent,
+    Contractor,
+    Document,
+    DocumentRequirementMatch,
+    Project,
+    ProjectContractor,
+    ProjectRequirement,
+    Requirement,
+    User,
+)
 from app.models.evidence_intelligence import EvidenceIntelligence
+from app.services.readiness import calculate_readiness
 
 router = APIRouter(prefix="/api/evidence", tags=["evidence-intelligence"])
 
@@ -54,6 +65,33 @@ class EvidenceIntelligenceResponse(BaseModel):
     updated_at: datetime
     mapping_status: str
     computed_state: str
+
+
+class EvidenceRequirementImpact(BaseModel):
+    requirement_id: UUID
+    requirement_name: str
+    project_count: int
+    project_ids: list[UUID]
+
+
+class EvidenceProjectImpact(BaseModel):
+    project_id: UUID
+    project_name: str
+    contractor_id: UUID
+    contractor_name: str
+    readiness_score: int
+    readiness_status: str
+    counts_for_readiness: bool
+    affected_requirement_ids: list[UUID]
+    affected_requirement_names: list[str]
+
+
+class EvidenceImpactResponse(BaseModel):
+    document_id: UUID
+    document_name: str
+    computed_state: str
+    requirement_impacts: list[EvidenceRequirementImpact]
+    project_impacts: list[EvidenceProjectImpact]
 
 
 def _document(db: Session, document_id: UUID, company_id: UUID) -> Document:
@@ -114,6 +152,116 @@ def get_evidence_intelligence(
     db.commit()
     db.refresh(intelligence)
     return _response(db, document, intelligence)
+
+
+@router.get("/{document_id}/impact", response_model=EvidenceImpactResponse)
+def get_evidence_impact(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    document = _document(db, document_id, user.company_id)
+    intelligence = _record(db, document.id)
+    db.commit()
+    db.refresh(intelligence)
+
+    matches = db.scalars(
+        select(DocumentRequirementMatch)
+        .join(Requirement, Requirement.id == DocumentRequirementMatch.requirement_id)
+        .where(
+            DocumentRequirementMatch.document_id == document.id,
+            Requirement.company_id == user.company_id,
+        )
+    ).all()
+    requirement_ids = [match.requirement_id for match in matches]
+    requirements = (
+        db.scalars(select(Requirement).where(Requirement.id.in_(requirement_ids), Requirement.company_id == user.company_id)).all()
+        if requirement_ids
+        else []
+    )
+    requirements_by_id = {item.id: item for item in requirements}
+
+    project_links = (
+        db.scalars(select(ProjectRequirement).where(ProjectRequirement.requirement_id.in_(requirement_ids))).all()
+        if requirement_ids
+        else []
+    )
+    project_ids = {link.project_id for link in project_links}
+    projects = (
+        db.scalars(select(Project).where(Project.id.in_(project_ids), Project.company_id == user.company_id)).all()
+        if project_ids
+        else []
+    )
+    projects_by_id = {project.id: project for project in projects}
+
+    requirement_projects: dict[UUID, set[UUID]] = {}
+    for link in project_links:
+        if link.project_id in projects_by_id and link.requirement_id in requirements_by_id:
+            requirement_projects.setdefault(link.requirement_id, set()).add(link.project_id)
+
+    requirement_impacts = [
+        EvidenceRequirementImpact(
+            requirement_id=requirement.id,
+            requirement_name=requirement.name,
+            project_count=len(requirement_projects.get(requirement.id, set())),
+            project_ids=sorted(requirement_projects.get(requirement.id, set()), key=str),
+        )
+        for requirement in requirements
+    ]
+
+    project_impacts: list[EvidenceProjectImpact] = []
+    if document.contractor_id is not None and project_ids:
+        assignments = db.scalars(
+            select(ProjectContractor).where(
+                ProjectContractor.project_id.in_(project_ids),
+                ProjectContractor.contractor_id == document.contractor_id,
+            )
+        ).all()
+        contractor = db.scalar(
+            select(Contractor).where(
+                Contractor.id == document.contractor_id,
+                Contractor.company_id == user.company_id,
+            )
+        )
+        if contractor is not None:
+            for assignment in assignments:
+                project = projects_by_id.get(assignment.project_id)
+                if project is None:
+                    continue
+                affected_requirements = [
+                    requirement
+                    for requirement in requirements
+                    if project.id in requirement_projects.get(requirement.id, set())
+                ]
+                readiness = calculate_readiness(
+                    db,
+                    user.company_id,
+                    project.id,
+                    document.contractor_id,
+                )
+                project_impacts.append(
+                    EvidenceProjectImpact(
+                        project_id=project.id,
+                        project_name=project.name,
+                        contractor_id=contractor.id,
+                        contractor_name=contractor.name,
+                        readiness_score=readiness["score"],
+                        readiness_status=readiness["status"],
+                        counts_for_readiness=(
+                            _computed_state(document, intelligence, mapped=True) == "valid"
+                        ),
+                        affected_requirement_ids=[item.id for item in affected_requirements],
+                        affected_requirement_names=[item.name for item in affected_requirements],
+                    )
+                )
+
+    return EvidenceImpactResponse(
+        document_id=document.id,
+        document_name=document.name,
+        computed_state=_computed_state(document, intelligence, bool(matches)),
+        requirement_impacts=requirement_impacts,
+        project_impacts=project_impacts,
+    )
 
 
 @router.patch("/{document_id}/intelligence", response_model=EvidenceIntelligenceResponse)
