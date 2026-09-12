@@ -8,6 +8,7 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.contractor_management import router as contractor_management_router
 from app.api.dashboard_consistency import router as dashboard_consistency_router
+from app.api.evidence_intelligence import router as evidence_intelligence_router
 from app.api.evidence_management import router as evidence_management_router
 from app.api.insights import router as insights_router
 from app.api.notifications import router as notifications_router
@@ -22,6 +23,7 @@ from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import auth_security  # noqa: F401
 from app.models import entities  # noqa: F401
+from app.models import evidence_intelligence  # noqa: F401
 from app.models import rumi  # noqa: F401
 from app.models import workspace  # noqa: F401
 from app.services.rbac import enforce_request_permission
@@ -40,7 +42,7 @@ def ensure_development_schema() -> None:
         connection.execute(text("ALTER TABLE workspace_invitations ALTER COLUMN token DROP NOT NULL"))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_workspace_invitations_token_hash ON workspace_invitations (token_hash) WHERE token_hash IS NOT NULL"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_invitations_expires_at ON workspace_invitations (expires_at)"))
-    
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -63,6 +65,7 @@ app.include_router(resources_router)
 app.include_router(project_workflow_router)
 app.include_router(requirement_management_router)
 app.include_router(contractor_management_router)
+app.include_router(evidence_intelligence_router)
 app.include_router(evidence_management_router)
 app.include_router(readiness_management_router)
 app.include_router(notifications_router)
