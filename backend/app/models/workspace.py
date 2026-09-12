@@ -13,9 +13,14 @@ class WorkspaceInvitation(Base):
     company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
     email: Mapped[str] = mapped_column(String(255), index=True)
     role: Mapped[str] = mapped_column(String(30), default="member")
-    token: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    # Legacy token is retained for existing development records; new invites
+    # use token_hash and never persist the raw invitation token.
+    token: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
+    token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
