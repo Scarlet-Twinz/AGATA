@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useAuth } from "../auth/AuthContext";
 
 const css = `
 .settings-page{max-width:1220px;margin:0 auto;padding:32px;color:#eef2f7}
@@ -7,7 +8,7 @@ const css = `
 .settings-layout{display:grid;grid-template-columns:235px 1fr;gap:22px}.tabs{display:grid;align-content:start;gap:4px;position:sticky;top:24px;height:max-content}.tab{background:transparent;border:1px solid transparent;color:#9aa6b7;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;font-weight:600}.tab:hover{background:#0b0e13;color:#dce3ed}.tab.active{background:#10141b;border-color:rgba(255,255,255,.09);color:#fff}.tab small{display:block;font-size:10px;font-weight:400;color:#667386;margin-top:3px}
 .panel{background:#090b0f;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:24px;margin-bottom:14px}.panel h2{margin:7px 0;font-size:20px}.panel h3{margin:0 0 5px;font-size:14px}.panel-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:18px;margin-bottom:4px}
 .field{display:grid;gap:7px;margin-top:17px}.field label{font-size:12px;color:#aab4c3;font-weight:650}.field input,.field select{background:#0d1016;color:#fff;border:1px solid rgba(255,255,255,.1);padding:11px 12px;border-radius:10px;outline:none}.field input:focus,.field select:focus{border-color:rgba(113,135,255,.65)}.field input[readonly]{color:#7e8999}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.save{margin-top:19px;background:#e8edf5;color:#07090d;border:0;border-radius:10px;padding:11px 16px;font-weight:750;cursor:pointer}.save:disabled{opacity:.55;cursor:default}.notice{margin-top:14px;padding:11px 13px;border-radius:10px;background:#0d1513;border:1px solid rgba(50,220,166,.18);color:#9ee8cf;font-size:12px}.error{margin-top:14px;padding:11px 13px;border-radius:10px;background:#17100f;border:1px solid rgba(255,110,100,.18);color:#ffb0a8;font-size:12px}
+.save{margin-top:19px;background:#e8edf5;color:#07090d;border:0;border-radius:10px;padding:11px 16px;font-weight:750;cursor:pointer}.save:disabled{opacity:.55;cursor:default}.notice{margin-top:14px;padding:11px 13px;border-radius:10px;background:#0d1513;border:1px solid rgba(50,220,166,.18);color:#9ee8cf;font-size:12px}.error{margin-top:14px;padding:11px 13px;border-radius:10px;background:#17100f;border:1px solid rgba(255,110,100,.18);color:#ffb0a8;font-size:12px}.hint{margin-top:10px;font-size:12px;color:#718094}
 .row{display:flex;justify-content:space-between;gap:20px;padding:15px 0;border-top:1px solid rgba(255,255,255,.06)}.row:first-child{border-top:0}.status{font-size:11px;color:#9aa6b7}.switch{display:flex;justify-content:space-between;gap:20px;padding:16px 0;border-top:1px solid rgba(255,255,255,.06)}.switch:first-of-type{border-top:0}.switch strong{font-size:13px}.badge{display:inline-flex;padding:5px 8px;border-radius:99px;background:#151a23;color:#aeb9c9;font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
 @media(max-width:800px){.settings-layout{grid-template-columns:1fr}.tabs{position:static;display:flex;overflow:auto}.tab{min-width:max-content}.grid2{grid-template-columns:1fr}}
 `;
@@ -23,39 +24,51 @@ const sections:[string,string,string][]=[
 ];
 
 export default function SettingsPage(){
+ const { refreshUser } = useAuth();
  const [data,setData]=useState<SettingsData|null>(null);
  const [companyName,setCompanyName]=useState("");
  const [fullName,setFullName]=useState("");
+ const [email,setEmail]=useState("");
+ const [currentPassword,setCurrentPassword]=useState("");
  const [tab,setTab]=useState("workspace");
  const [saving,setSaving]=useState(false);
  const [saved,setSaved]=useState("");
  const [error,setError]=useState("");
 
- useEffect(()=>{api<SettingsData>("/api/workspace/profile").then(d=>{setData(d);setCompanyName(d.company?.name||"");setFullName(d.user?.name||"")}).catch(e=>setError(e instanceof Error?e.message:"Unable to load settings."));},[]);
+ useEffect(()=>{api<SettingsData>("/api/workspace/profile").then(d=>{setData(d);setCompanyName(d.company?.name||"");setFullName(d.user?.name||"");setEmail(d.user?.email||"")}).catch(e=>setError(e instanceof Error?e.message:"Unable to load settings."));},[]);
 
  async function saveWorkspace(){
-   if(!companyName.trim()||!fullName.trim()) return;
-   try{setSaving(true);setError("");const next=await api<SettingsData>("/api/workspace/profile",{method:"PATCH",body:JSON.stringify({company_name:companyName.trim(),full_name:fullName.trim()})});setData(next);setSaved("Changes saved to the AGATA workspace.");window.setTimeout(()=>setSaved(""),3000);}catch(e){setError(e instanceof Error?e.message:"Unable to save settings.");}finally{setSaving(false);}
+   if(!companyName.trim()) return;
+   try{setSaving(true);setError("");const next=await api<SettingsData>("/api/workspace/profile",{method:"PATCH",body:JSON.stringify({company_name:companyName.trim()})});setData(prev=>({...prev,...next}));setSaved("Workspace changes saved.");window.setTimeout(()=>setSaved(""),3000);}catch(e){setError(e instanceof Error?e.message:"Unable to save workspace settings.");}finally{setSaving(false);}
+ }
+
+ async function saveAccount(){
+   if(!fullName.trim()||!email.trim()) return;
+   const emailChanged=email.trim().toLowerCase()!==(data?.user?.email||"").toLowerCase();
+   if(emailChanged&&!currentPassword){setError("Enter your current password to change your sign-in email.");return;}
+   try{setSaving(true);setError("");const next=await api<{user:{id:string;name:string;email:string}}>("/api/workspace/account",{method:"PATCH",body:JSON.stringify({full_name:fullName.trim(),email:email.trim().toLowerCase(),current_password:emailChanged?currentPassword:undefined})});setData(prev=>({...prev,user:next.user}));setFullName(next.user.name);setEmail(next.user.email);setCurrentPassword("");await refreshUser();setSaved(emailChanged?"Profile and sign-in email updated.":"Profile updated.");window.setTimeout(()=>setSaved(""),3000);}catch(e){setError(e instanceof Error?e.message:"Unable to save account settings.");}finally{setSaving(false);}
  }
 
  return <main className="settings-page"><style>{css}</style>
   <header className="settings-head"><p className="eyebrow">ADMINISTRATION</p><h1>Settings</h1><p className="muted">Manage your profile, organization, workspace behavior, notifications, intelligence and security.</p></header>
   <div className="settings-layout">
-   <nav className="tabs" aria-label="Settings sections">{sections.map(([id,label,desc])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>{setTab(id);setError("")}}>{label}<small>{desc}</small></button>)}</nav>
+   <nav className="tabs" aria-label="Settings sections">{sections.map(([id,label,desc])=><button key={id} className={`tab ${tab===id?"active":""}`} onClick={()=>{setTab(id);setError("");setSaved("")}}>{label}<small>{desc}</small></button>)}</nav>
    <section>
     {tab==="workspace"&&<>
       <article className="panel"><div className="panel-head"><div><p className="eyebrow">ORGANIZATION</p><h2>Company information</h2><p className="muted">This identity is used across your AGATA workspace and operational surfaces.</p></div><span className="badge">Admin</span></div>
        <div className="grid2"><div className="field"><label>Company / organization name</label><input value={companyName} onChange={e=>setCompanyName(e.target.value)} placeholder="Your company name"/></div><div className="field"><label>Workspace ID</label><input readOnly value={data?.company?.id||""}/></div></div>
-       <button className="save" disabled={saving} onClick={saveWorkspace}>{saving?"Saving…":"Save changes"}</button>{saved&&<div className="notice">{saved}</div>}{error&&<div className="error">{error}</div>}
+       <button className="save" disabled={saving} onClick={saveWorkspace}>{saving?"Saving…":"Save workspace"}</button>{saved&&<div className="notice">{saved}</div>}{error&&<div className="error">{error}</div>}
       </article>
       <article className="panel"><div className="panel-head"><div><p className="eyebrow">WORKSPACE</p><h2>Workspace behavior</h2><p className="muted">Core AGATA principles are enforced by the product rather than being cosmetic switches.</p></div></div>
        <div className="row"><div><strong>Evidence before opinion</strong><div className="muted">Readiness remains grounded in recorded evidence and deterministic checks.</div></div><span className="status">Enforced</span></div>
        <div className="row"><div><strong>Workspace-scoped intelligence</strong><div className="muted">Rumi receives workspace context and does not replace the readiness engine.</div></div><span className="status">Enforced</span></div>
       </article>
     </>}
-    {tab==="account"&&<article className="panel"><div className="panel-head"><div><p className="eyebrow">MY ACCOUNT</p><h2>Profile</h2><p className="muted">Update the identity shown to your workspace team.</p></div></div>
-      <div className="grid2"><div className="field"><label>Full name</label><input value={fullName} onChange={e=>setFullName(e.target.value)}/></div><div className="field"><label>Email address</label><input readOnly value={data?.user?.email||""}/></div></div>
-      <div className="field"><label>Account ID</label><input readOnly value={data?.user?.id||""}/></div><button className="save" disabled={saving} onClick={saveWorkspace}>{saving?"Saving…":"Save profile"}</button>{saved&&<div className="notice">{saved}</div>}{error&&<div className="error">{error}</div>}
+    {tab==="account"&&<article className="panel"><div className="panel-head"><div><p className="eyebrow">MY ACCOUNT</p><h2>Profile</h2><p className="muted">Update the identity shown to your workspace team and the email used to sign in.</p></div></div>
+      <div className="grid2"><div className="field"><label>Full name</label><input value={fullName} onChange={e=>setFullName(e.target.value)}/></div><div className="field"><label>Sign-in email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)}/></div></div>
+      <div className="field"><label>Current password <span className="hint">required only when changing email</span></label><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} autoComplete="current-password" placeholder="Enter current password to change email"/></div>
+      <div className="hint">Changing your sign-in email changes the address you use to log in. AGATA requires your current password before making that change. Email verification delivery will be connected with the production email/identity service.</div>
+      <div className="field"><label>Account ID</label><input readOnly value={data?.user?.id||""}/></div><button className="save" disabled={saving} onClick={saveAccount}>{saving?"Saving…":"Save profile"}</button>{saved&&<div className="notice">{saved}</div>}{error&&<div className="error">{error}</div>}
     </article>}
     {tab==="notifications"&&<article className="panel"><div className="panel-head"><div><p className="eyebrow">PERSONAL PREFERENCES</p><h2>Notifications</h2><p className="muted">Notifications are generated by AGATA's live workspace events. These controls describe how you receive them; they do not duplicate the Notifications inbox.</p></div></div>
       {[['Readiness changes','Receive updates when readiness status changes for work assigned to you.'],['Evidence expiration','Receive reminders when evidence you own approaches expiration.'],['Attention items','Receive alerts for actionable workspace conditions.'],['Security events','Receive account and authentication alerts.']].map(([title,desc])=><div className="switch" key={title}><div><strong>{title}</strong><div className="muted">{desc}</div></div><span className="status">In-app · enabled</span></div>)}
