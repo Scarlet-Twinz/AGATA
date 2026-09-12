@@ -18,6 +18,7 @@ from app.models.entities import (
     Requirement,
     User,
 )
+from app.models.evidence_intelligence import EvidenceIntelligence
 from app.schemas.domain import (
     ContractorCreate,
     ContractorResponse,
@@ -247,7 +248,6 @@ def dashboard(
             )
         )
 
-    # Build real six-month history from recorded readiness checks.
     month_starts: list[datetime] = []
     current_month = now.replace(
         day=1, hour=0, minute=0, second=0, microsecond=0
@@ -590,6 +590,8 @@ def create_document(
         company_record_or_404(db, Contractor, payload.contractor_id, user.company_id)
     document = Document(company_id=user.company_id, **payload.model_dump())
     db.add(document)
+    db.flush()
+    db.add(EvidenceIntelligence(document_id=document.id, source_type="manual"))
     db.commit()
     db.refresh(document)
     return document
