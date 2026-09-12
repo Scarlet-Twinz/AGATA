@@ -5,7 +5,6 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -16,9 +15,13 @@ from app.services.email import EmailDeliveryError, send_email
 INVITATION_EXPIRE_HOURS = 72
 
 
-def issue_invitation(db: Session, *, company_id: UUID, email: str, role: str) -> tuple[WorkspaceInvitation, str]:
+def _new_token() -> tuple[str, str]:
     raw_token = secrets.token_urlsafe(48)
-    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    return raw_token, hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def issue_invitation(db: Session, *, company_id: UUID, email: str, role: str) -> tuple[WorkspaceInvitation, str]:
+    raw_token, token_hash = _new_token()
     now = datetime.now(timezone.utc)
     item = WorkspaceInvitation(
         company_id=company_id,
@@ -32,6 +35,17 @@ def issue_invitation(db: Session, *, company_id: UUID, email: str, role: str) ->
     db.add(item)
     db.flush()
     return item, raw_token
+
+
+def rotate_invitation(db: Session, item: WorkspaceInvitation) -> str:
+    raw_token, token_hash = _new_token()
+    item.token = None
+    item.token_hash = token_hash
+    item.status = "pending"
+    item.expires_at = datetime.now(timezone.utc) + timedelta(hours=INVITATION_EXPIRE_HOURS)
+    item.accepted_at = None
+    item.revoked_at = None
+    return raw_token
 
 
 def invitation_url(raw_token: str) -> str:
@@ -58,4 +72,4 @@ async def send_invitation_email(*, email: str, role: str, company_name: str, raw
     )
 
 
-__all__ = ["EmailDeliveryError", "INVITATION_EXPIRE_HOURS", "invitation_url", "issue_invitation", "send_invitation_email"]
+__all__ = ["EmailDeliveryError", "INVITATION_EXPIRE_HOURS", "invitation_url", "issue_invitation", "rotate_invitation", "send_invitation_email"]
