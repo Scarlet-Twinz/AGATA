@@ -13,6 +13,7 @@ from app.models.auth_security import UserSecurity
 from app.models.entities import Company, User
 from app.schemas.auth import (
     AuthMessageResponse,
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     ResetPasswordRequest,
@@ -182,6 +183,24 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     record_audit(db, company_id=user.company_id, user_id=user.id, action="account.password_reset", entity_type="user", entity_id=user.id, description="Reset the account password using a recovery link.")
     db.commit()
     return AuthMessageResponse(message="Password updated. You can now sign in with your new password.")
+
+
+@router.post("/change-password", response_model=AuthMessageResponse)
+def change_password(payload: ChangePasswordRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> AuthMessageResponse:
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Your current password is incorrect")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="Your new password must be different from your current password")
+
+    user.password_hash = hash_password(payload.new_password)
+    security = db.get(UserSecurity, user.id)
+    if security is None:
+        security = UserSecurity(user_id=user.id)
+        db.add(security)
+    security.password_changed_at = datetime.now(timezone.utc)
+    record_audit(db, company_id=user.company_id, user_id=user.id, action="account.password_changed", entity_type="user", entity_id=user.id, description="Changed the account password while authenticated.")
+    db.commit()
+    return AuthMessageResponse(message="Password changed successfully.")
 
 
 @router.get("/me", response_model=UserResponse)
