@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.models.entities import Company, Contractor, Document, Project, Requirement, User
 from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspaceRole
 from app.services.audit import record_audit
-from app.services.rbac import get_membership, require_permission
+from app.services.rbac import get_membership, has_permission, require_permission
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -98,13 +98,8 @@ def workspace_team(db: Session = Depends(get_db), user: User = Depends(require_p
             membership = get_membership(db, item)
         role = db.get(WorkspaceRole, membership.role_id)
         result.append({
-            "id": str(item.id),
-            "name": item.full_name,
-            "email": item.email,
-            "joined_at": item.created_at,
-            "status": membership.status,
-            "role": role.key if role else "unknown",
-            "role_name": role.name if role else "Unknown",
+            "id": str(item.id), "name": item.full_name, "email": item.email, "joined_at": item.created_at,
+            "status": membership.status, "role": role.key if role else "unknown", "role_name": role.name if role else "Unknown",
         })
     return result
 
@@ -114,6 +109,18 @@ def workspace_roles(db: Session = Depends(get_db), user: User = Depends(require_
     get_membership(db, user)
     roles = db.scalars(select(WorkspaceRole).where(WorkspaceRole.company_id == user.company_id).order_by(WorkspaceRole.key.asc())).all()
     return [{"key": role.key, "name": role.name, "description": role.description, "is_system": role.is_system} for role in roles]
+
+
+@router.get("/access")
+def workspace_access(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    membership = get_membership(db, user)
+    role = db.get(WorkspaceRole, membership.role_id)
+    return {
+        "role": role.key if role else "unknown",
+        "role_name": role.name if role else "Unknown",
+        "status": membership.status,
+        "permissions": [key for key in (awaitable := [])],
+    }
 
 
 @router.get("/invitations")
