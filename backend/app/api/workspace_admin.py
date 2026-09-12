@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.models.entities import Company, Contractor, Document, Project, Requirement, User
 from app.models.workspace import WorkspaceInvitation, WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
 from app.services.audit import record_audit
-from app.services.rbac import get_membership, has_permission, require_permission
+from app.services.rbac import get_membership, require_permission
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -97,10 +97,7 @@ def workspace_team(db: Session = Depends(get_db), user: User = Depends(require_p
         if membership is None:
             membership = get_membership(db, item)
         role = db.get(WorkspaceRole, membership.role_id)
-        result.append({
-            "id": str(item.id), "name": item.full_name, "email": item.email, "joined_at": item.created_at,
-            "status": membership.status, "role": role.key if role else "unknown", "role_name": role.name if role else "Unknown",
-        })
+        result.append({"id": str(item.id), "name": item.full_name, "email": item.email, "joined_at": item.created_at, "status": membership.status, "role": role.key if role else "unknown", "role_name": role.name if role else "Unknown"})
     return result
 
 
@@ -115,12 +112,7 @@ def workspace_roles(db: Session = Depends(get_db), user: User = Depends(require_
 def workspace_access(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     membership = get_membership(db, user)
     role = db.get(WorkspaceRole, membership.role_id)
-    permissions = db.scalars(
-        select(WorkspacePermission.key)
-        .join(WorkspaceRolePermission, WorkspaceRolePermission.permission_id == WorkspacePermission.id)
-        .where(WorkspaceRolePermission.role_id == membership.role_id)
-        .order_by(WorkspacePermission.key.asc())
-    ).all()
+    permissions = db.scalars(select(WorkspacePermission.key).join(WorkspaceRolePermission, WorkspaceRolePermission.permission_id == WorkspacePermission.id).where(WorkspaceRolePermission.role_id == membership.role_id).order_by(WorkspacePermission.key.asc())).all()
     return {"role": role.key if role else "unknown", "role_name": role.name if role else "Unknown", "status": membership.status, "permissions": permissions}
 
 
@@ -162,6 +154,8 @@ def revoke_invitation(invitation_id: UUID, db: Session = Depends(get_db), user: 
 
 @router.patch("/team/{user_id}/role")
 def update_member_role(user_id: UUID, payload: RoleUpdate, db: Session = Depends(get_db), user: User = Depends(require_permission("team.manage"))):
+    if user_id == user.id:
+        raise HTTPException(status_code=403, detail="You cannot change your own workspace role")
     target = db.scalar(select(User).where(User.id == user_id, User.company_id == user.company_id))
     if not target:
         raise HTTPException(status_code=404, detail="Workspace member not found")
@@ -186,6 +180,8 @@ def update_member_role(user_id: UUID, payload: RoleUpdate, db: Session = Depends
 
 @router.post("/team/{user_id}/suspend")
 def suspend_member(user_id: UUID, db: Session = Depends(get_db), user: User = Depends(require_permission("team.manage"))):
+    if user_id == user.id:
+        raise HTTPException(status_code=403, detail="You cannot suspend your own workspace access")
     target = db.scalar(select(User).where(User.id == user_id, User.company_id == user.company_id))
     if not target:
         raise HTTPException(status_code=404, detail="Workspace member not found")
