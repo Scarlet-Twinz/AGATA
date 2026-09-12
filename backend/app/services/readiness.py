@@ -11,6 +11,7 @@ from app.models.entities import (
     ReadinessStatus,
     Requirement,
 )
+from app.models.evidence_intelligence import EvidenceIntelligence
 
 
 def calculate_readiness(db: Session, company_id: UUID, project_id: UUID, contractor_id: UUID) -> dict:
@@ -44,16 +45,33 @@ def calculate_readiness(db: Session, company_id: UUID, project_id: UUID, contrac
         else []
     )
     matched_pairs = {(match.document_id, match.requirement_id) for match in explicit_matches}
+    intelligence_rows = (
+        db.scalars(
+            select(EvidenceIntelligence).where(EvidenceIntelligence.document_id.in_(document_ids))
+        ).all()
+        if document_ids
+        else []
+    )
+    intelligence_by_document = {item.document_id: item for item in intelligence_rows}
 
     now = datetime.now(timezone.utc)
     missing: list[str] = []
     satisfied = 0
     for requirement in requirements:
-        valid_documents = [
-            document
-            for document in documents
-            if document.expires_at is None or document.expires_at > now
-        ]
+        valid_documents = []
+        for document in documents:
+            if document.expires_at is not None and document.expires_at <= now:
+                continue
+            intelligence = intelligence_by_document.get(document.id)
+            # Documents created before Evidence Intelligence existed remain compatible with
+            # the legacy readiness model. New/managed evidence must be verified and approved.
+            if intelligence is not None and (
+                intelligence.verification_status != "verified"
+                or intelligence.review_status != "approved"
+            ):
+                continue
+            valid_documents.append(document)
+
         explicitly_matched = any(
             (document.id, requirement.id) in matched_pairs for document in valid_documents
         )
