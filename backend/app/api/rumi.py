@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,8 @@ class RumiRequest(BaseModel):
 
 
 class ConversationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     title: str
     created_at: datetime
@@ -45,6 +47,8 @@ class ConversationResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     role: str
     content: str
