@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.entities import User
+from app.services.rbac import get_membership
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -22,4 +23,5 @@ def get_current_user(
     user = db.get(User, user_id)
     if not user or user.company_id != company_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+    get_membership(db, user)
     return user
