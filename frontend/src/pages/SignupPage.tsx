@@ -1,9 +1,9 @@
 import { FormEvent, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 export function SignupPage() {
-  const { user, loading, signUp } = useAuth();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState("");
   const [fullName, setFullName] = useState("");
@@ -14,8 +14,6 @@ export function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  if (!loading && user) return <Navigate to="/dashboard" replace />;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
