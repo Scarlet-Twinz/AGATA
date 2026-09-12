@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -21,6 +22,16 @@ def _new_token() -> tuple[str, str]:
 
 
 def issue_invitation(db: Session, *, company_id: UUID, email: str, role: str) -> tuple[WorkspaceInvitation, str]:
+    existing = db.scalar(
+        select(WorkspaceInvitation).where(
+            WorkspaceInvitation.company_id == company_id,
+            WorkspaceInvitation.email == email,
+            WorkspaceInvitation.status == "pending",
+        )
+    )
+    if existing is not None:
+        return existing, rotate_invitation(db, existing)
+
     raw_token, token_hash = _new_token()
     now = datetime.now(timezone.utc)
     item = WorkspaceInvitation(
