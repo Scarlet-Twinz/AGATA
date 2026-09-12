@@ -17,6 +17,7 @@ from app.api.requirement_management import router as requirement_management_rout
 from app.api.resources import router as resources_router
 from app.api.rumi import router as rumi_router
 from app.api.workspace_admin import router as workspace_admin_router
+from app.api.workspace_invitations import router as workspace_invitations_router
 from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import auth_security  # noqa: F401
@@ -46,6 +47,7 @@ app.include_router(readiness_management_router)
 app.include_router(notifications_router)
 app.include_router(rumi_router)
 app.include_router(insights_router)
+app.include_router(workspace_invitations_router)
 app.include_router(workspace_admin_router)
 app.include_router(audit_router)
 
