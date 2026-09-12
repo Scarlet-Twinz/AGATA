@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, ReadinessStatus, User
 from app.schemas.domain import ReadinessItemResponse, ReadinessResponse
+from app.services.audit import record_audit
+from app.services.rbac import require_permission
 from app.services.readiness import calculate_readiness
 
 router = APIRouter(prefix="/api", tags=["readiness-management"])
@@ -33,7 +34,7 @@ def _assignment_or_404(db: Session, project_id: UUID, contractor_id: UUID, compa
 @router.get("/readiness", response_model=list[ReadinessItemResponse])
 def list_readiness(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("readiness.view")),
 ):
     assignments = db.scalars(
         select(ProjectContractor)
@@ -91,12 +92,7 @@ def list_readiness(
             continue
         key = (assignment.project_id, assignment.contractor_id)
         check = latest_checks.get(key)
-        current = calculate_readiness(
-            db,
-            user.company_id,
-            assignment.project_id,
-            assignment.contractor_id,
-        )
+        current = calculate_readiness(db, user.company_id, assignment.project_id, assignment.contractor_id)
         response.append(
             ReadinessItemResponse(
                 project_id=project.id,
@@ -123,7 +119,7 @@ def evaluate_readiness(
     project_id: UUID,
     contractor_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("readiness.evaluate")),
 ):
     _assignment_or_404(db, project_id, contractor_id, user.company_id)
     result = calculate_readiness(db, user.company_id, project_id, contractor_id)
@@ -136,5 +132,14 @@ def evaluate_readiness(
         explanation=result["explanation"],
     )
     db.add(check)
+    record_audit(
+        db,
+        company_id=user.company_id,
+        user_id=user.id,
+        action="evaluate",
+        entity_type="readiness",
+        entity_id=check.id,
+        description=f"Readiness evaluated for project {project_id} and contractor {contractor_id}: {result['status'].replace('_', ' ')} ({result['score']}%).",
+    )
     db.commit()
     return result
