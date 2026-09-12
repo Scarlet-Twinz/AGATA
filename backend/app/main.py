@@ -20,6 +20,7 @@ from app.api.workspace_admin import router as workspace_admin_router
 from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models import entities  # noqa: F401
+from app.models import security  # noqa: F401
 from app.models import workspace  # noqa: F401
 
 settings = get_settings()
