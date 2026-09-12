@@ -3,11 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import ComplianceCheck, Contractor, Project, ReadinessStatus, User
 from app.schemas.domain import ReadinessResponse
 from app.services.audit import record_audit
+from app.services.rbac import require_permission
 from app.services.readiness import calculate_readiness
 
 router = APIRouter(prefix="/api", tags=["project-workflow"])
@@ -25,7 +25,7 @@ def evaluate_project_contractor(
     project_id: UUID,
     contractor_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_permission("readiness.evaluate")),
 ):
     project = _company_record_or_404(db, Project, project_id, user.company_id)
     contractor = _company_record_or_404(db, Contractor, contractor_id, user.company_id)
