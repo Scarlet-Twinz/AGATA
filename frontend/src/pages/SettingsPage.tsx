@@ -30,8 +30,11 @@ export default function SettingsPage(){
  const [fullName,setFullName]=useState("");
  const [email,setEmail]=useState("");
  const [currentPassword,setCurrentPassword]=useState("");
+ const [newPassword,setNewPassword]=useState("");
+ const [confirmPassword,setConfirmPassword]=useState("");
  const [tab,setTab]=useState("workspace");
  const [saving,setSaving]=useState(false);
+ const [changingPassword,setChangingPassword]=useState(false);
  const [saved,setSaved]=useState("");
  const [error,setError]=useState("");
 
@@ -47,6 +50,13 @@ export default function SettingsPage(){
    const emailChanged=email.trim().toLowerCase()!==(data?.user?.email||"").toLowerCase();
    if(emailChanged&&!currentPassword){setError("Enter your current password to change your sign-in email.");return;}
    try{setSaving(true);setError("");const next=await api<{user:{id:string;name:string;email:string}}>("/api/workspace/account",{method:"PATCH",body:JSON.stringify({full_name:fullName.trim(),email:email.trim().toLowerCase(),current_password:emailChanged?currentPassword:undefined})});setData(prev=>({...prev,user:next.user}));setFullName(next.user.name);setEmail(next.user.email);setCurrentPassword("");await refreshUser();setSaved(emailChanged?"Profile and sign-in email updated.":"Profile updated.");window.setTimeout(()=>setSaved(""),3000);}catch(e){setError(e instanceof Error?e.message:"Unable to save account settings.");}finally{setSaving(false);}
+ }
+
+ async function changePassword(){
+   if(!currentPassword||!newPassword||!confirmPassword){setError("Enter your current password and your new password twice.");return;}
+   if(newPassword!==confirmPassword){setError("The new password and confirmation do not match.");return;}
+   if(newPassword.length<8){setError("Your new password must be at least 8 characters.");return;}
+   try{setChangingPassword(true);setError("");await api("/auth/change-password",{method:"POST",body:JSON.stringify({current_password:currentPassword,new_password:newPassword})});setCurrentPassword("");setNewPassword("");setConfirmPassword("");setSaved("Password changed successfully.");window.setTimeout(()=>setSaved(""),3000);}catch(e){setError(e instanceof Error?e.message:"Unable to change password.");}finally{setChangingPassword(false);}
  }
 
  return <main className="settings-page"><style>{css}</style>
@@ -79,12 +89,22 @@ export default function SettingsPage(){
       <div className="row"><div><strong>Readiness authority</strong><div className="muted">Deterministic readiness results remain the source of truth.</div></div><span className="status">Enforced</span></div>
       <div className="row"><div><strong>Model provider</strong><div className="muted">Configured through the AGATA backend environment.</div></div><span className="status">Backend configured</span></div>
     </article>}
-    {tab==="security"&&<article className="panel"><div className="panel-head"><div><p className="eyebrow">ACCESS CONTROL</p><h2>Security</h2><p className="muted">Security controls that are currently real, with production-grade identity controls clearly separated from the development foundation.</p></div></div>
-      <div className="row"><div><strong>Authenticated session</strong><div className="muted">Your account is authenticated through the AGATA API.</div></div><span className="status">Active</span></div>
-      <div className="row"><div><strong>Password management</strong><div className="muted">Password change and reset flows are not exposed here until the production identity flow is connected.</div></div><span className="badge">Coming with identity</span></div>
-      <div className="row"><div><strong>API keys</strong><div className="muted">API key administration belongs here once external integrations are enabled.</div></div><span className="badge">Not configured</span></div>
-      <div className="row"><div><strong>Audit trail</strong><div className="muted">Workspace activity is recorded in the dedicated Audit Trail area.</div></div><span className="status">Separate module</span></div>
-    </article>}
+    {tab==="security"&&<>
+      <article className="panel"><div className="panel-head"><div><p className="eyebrow">PASSWORD</p><h2>Change password</h2><p className="muted">Change the password for your authenticated AGATA account. Recovery is also available from the sign-in page.</p></div><span className="badge">Active</span></div>
+       <div className="field"><label>Current password</label><input type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} autoComplete="current-password"/></div>
+       <div className="grid2"><div className="field"><label>New password</label><input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} autoComplete="new-password" minLength={8}/></div><div className="field"><label>Confirm new password</label><input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={8}/></div></div>
+       <button className="save" disabled={changingPassword} onClick={changePassword}>{changingPassword?"Changing…":"Change password"}</button>{saved&&<div className="notice">{saved}</div>}{error&&<div className="error">{error}</div>}
+      </article>
+      <article className="panel"><div className="panel-head"><div><p className="eyebrow">ACCESS CONTROL</p><h2>Security status</h2><p className="muted">Security controls that are currently real, with future enterprise identity capabilities clearly separated.</p></div></div>
+       <div className="row"><div><strong>Authenticated session</strong><div className="muted">Your account is authenticated through the AGATA API.</div></div><span className="status">Active</span></div>
+       <div className="row"><div><strong>Email verification</strong><div className="muted">New accounts must verify their email before sign-in. Verification links are single-use and time-limited.</div></div><span className="status">Enforced</span></div>
+       <div className="row"><div><strong>Password recovery</strong><div className="muted">Recovery uses a single-use, time-limited token rather than exposing the account password.</div></div><span className="status">Enforced</span></div>
+       <div className="row"><div><strong>Workspace RBAC</strong><div className="muted">Owner, Admin, Compliance Manager, Project Manager, Reviewer and Member permissions are enforced by the backend.</div></div><span className="status">Enforced</span></div>
+       <div className="row"><div><strong>API keys</strong><div className="muted">API key administration belongs here once external integrations are enabled.</div></div><span className="badge">Not configured</span></div>
+       <div className="row"><div><strong>SSO / MFA / SCIM</strong><div className="muted">Enterprise identity integrations are intentionally outside this local identity foundation.</div></div><span className="badge">Future enterprise</span></div>
+       <div className="row"><div><strong>Audit trail</strong><div className="muted">Password, invitation, membership and workspace security actions are recorded in the dedicated Audit Trail area.</div></div><span className="status">Separate module</span></div>
+      </article>
+    </>}
    </section>
   </div>
  </main>;
