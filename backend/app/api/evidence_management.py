@@ -7,155 +7,84 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.entities import Contractor, Document, DocumentRequirementMatch, Requirement, User
+from app.models.entities import AuditEvent, Contractor, Document, DocumentRequirementMatch, Requirement, User
 from app.schemas.domain import DocumentDetailResponse, DocumentRequirementMatchResponse, DocumentResponse, DocumentUpdate
 
 router = APIRouter(prefix="/api", tags=["evidence-management"])
 
 
 def document_or_404(db: Session, document_id: UUID, company_id: UUID) -> Document:
-    document = db.scalar(
-        select(Document).where(
-            Document.id == document_id,
-            Document.company_id == company_id,
-        )
-    )
+    document = db.scalar(select(Document).where(Document.id == document_id, Document.company_id == company_id))
     if not document:
         raise HTTPException(status_code=404, detail="Evidence not found")
     return document
 
 
 def requirement_or_404(db: Session, requirement_id: UUID, company_id: UUID) -> Requirement:
-    requirement = db.scalar(
-        select(Requirement).where(
-            Requirement.id == requirement_id,
-            Requirement.company_id == company_id,
-        )
-    )
+    requirement = db.scalar(select(Requirement).where(Requirement.id == requirement_id, Requirement.company_id == company_id))
     if not requirement:
         raise HTTPException(status_code=404, detail="Requirement not found")
     return requirement
 
 
 @router.get("/documents/{document_id}/detail", response_model=DocumentDetailResponse)
-def document_detail(
-    document_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+def document_detail(document_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     document = document_or_404(db, document_id, user.company_id)
     contractor = None
     if document.contractor_id:
-        contractor = db.scalar(
-            select(Contractor).where(
-                Contractor.id == document.contractor_id,
-                Contractor.company_id == user.company_id,
-            )
-        )
-
-    matches = db.scalars(
-        select(DocumentRequirementMatch).join(
-            Requirement, Requirement.id == DocumentRequirementMatch.requirement_id
-        ).where(
-            DocumentRequirementMatch.document_id == document.id,
-            Requirement.company_id == user.company_id,
-        )
-    ).all()
-    return DocumentDetailResponse(
-        document=document,
-        contractor_id=contractor.id if contractor else None,
-        contractor_name=contractor.name if contractor else None,
-        matches=[DocumentRequirementMatchResponse.model_validate(match) for match in matches],
-    )
+        contractor = db.scalar(select(Contractor).where(Contractor.id == document.contractor_id, Contractor.company_id == user.company_id))
+    matches = db.scalars(select(DocumentRequirementMatch).join(Requirement, Requirement.id == DocumentRequirementMatch.requirement_id).where(DocumentRequirementMatch.document_id == document.id, Requirement.company_id == user.company_id)).all()
+    return DocumentDetailResponse(document=document, contractor_id=contractor.id if contractor else None, contractor_name=contractor.name if contractor else None, matches=[DocumentRequirementMatchResponse.model_validate(match) for match in matches])
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
-def update_document(
-    document_id: UUID,
-    payload: DocumentUpdate,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+def update_document(document_id: UUID, payload: DocumentUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     document = document_or_404(db, document_id, user.company_id)
     values = payload.model_dump(exclude_unset=True)
-
     if "contractor_id" in values and values["contractor_id"] is not None:
-        contractor = db.scalar(
-            select(Contractor).where(
-                Contractor.id == values["contractor_id"],
-                Contractor.company_id == user.company_id,
-            )
-        )
+        contractor = db.scalar(select(Contractor).where(Contractor.id == values["contractor_id"], Contractor.company_id == user.company_id))
         if not contractor:
             raise HTTPException(status_code=404, detail="Contractor not found")
-
     for key, value in values.items():
         setattr(document, key, value)
-    db.commit()
-    db.refresh(document)
+    db.add(AuditEvent(company_id=user.company_id, user_id=user.id, action="evidence.updated", entity_type="document", entity_id=document.id, description=f"Updated evidence {document.name}."))
+    db.commit(); db.refresh(document)
     return document
 
 
 @router.delete("/documents/{document_id}", status_code=204)
-def delete_document(
-    document_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+def delete_document(document_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     document = document_or_404(db, document_id, user.company_id)
+    name = document.name
+    document_id_value = document.id
+    db.add(AuditEvent(company_id=user.company_id, user_id=user.id, action="evidence.deleted", entity_type="document", entity_id=document_id_value, description=f"Deleted evidence {name}."))
     db.delete(document)
     db.commit()
 
 
-@router.post(
-    "/documents/{document_id}/requirements/{requirement_id}",
-    response_model=DocumentRequirementMatchResponse,
-    status_code=201,
-)
-def map_document_requirement(
-    document_id: UUID,
-    requirement_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+@router.post("/documents/{document_id}/requirements/{requirement_id}", response_model=DocumentRequirementMatchResponse, status_code=201)
+def map_document_requirement(document_id: UUID, requirement_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     document = document_or_404(db, document_id, user.company_id)
     requirement = requirement_or_404(db, requirement_id, user.company_id)
-
     if document.contractor_id is None:
         raise HTTPException(status_code=422, detail="Evidence must belong to a contractor before it can be mapped")
-
-    existing = db.scalar(
-        select(DocumentRequirementMatch).where(
-            DocumentRequirementMatch.document_id == document.id,
-            DocumentRequirementMatch.requirement_id == requirement.id,
-        )
-    )
+    existing = db.scalar(select(DocumentRequirementMatch).where(DocumentRequirementMatch.document_id == document.id, DocumentRequirementMatch.requirement_id == requirement.id))
     if existing:
         raise HTTPException(status_code=409, detail="Evidence is already mapped to this requirement")
-
     match = DocumentRequirementMatch(document_id=document.id, requirement_id=requirement.id)
     db.add(match)
-    db.commit()
-    db.refresh(match)
+    db.add(AuditEvent(company_id=user.company_id, user_id=user.id, action="evidence.mapped", entity_type="document", entity_id=document.id, description=f"Mapped evidence {document.name} to requirement {requirement.name}."))
+    db.commit(); db.refresh(match)
     return match
 
 
 @router.delete("/documents/{document_id}/requirements/{requirement_id}", status_code=204)
-def unmap_document_requirement(
-    document_id: UUID,
-    requirement_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
+def unmap_document_requirement(document_id: UUID, requirement_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     document = document_or_404(db, document_id, user.company_id)
     requirement = requirement_or_404(db, requirement_id, user.company_id)
-    match = db.scalar(
-        select(DocumentRequirementMatch).where(
-            DocumentRequirementMatch.document_id == document.id,
-            DocumentRequirementMatch.requirement_id == requirement.id,
-        )
-    )
+    match = db.scalar(select(DocumentRequirementMatch).where(DocumentRequirementMatch.document_id == document.id, DocumentRequirementMatch.requirement_id == requirement.id))
     if not match:
         raise HTTPException(status_code=404, detail="Evidence mapping not found")
+    db.add(AuditEvent(company_id=user.company_id, user_id=user.id, action="evidence.unmapped", entity_type="document", entity_id=document.id, description=f"Removed evidence mapping from {document.name} to requirement {requirement.name}."))
     db.delete(match)
     db.commit()
