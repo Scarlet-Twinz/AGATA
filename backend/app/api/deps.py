@@ -30,7 +30,12 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     session = db.scalar(select(UserSession).where(UserSession.token_jti == jti, UserSession.user_id == user_id, UserSession.company_id == company_id))
-    if not session or session.revoked_at is not None or session.expires_at <= datetime.now(timezone.utc):
+    if not session or session.revoked_at is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication session is no longer valid")
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication session is no longer valid")
 
     get_membership(db, user)
