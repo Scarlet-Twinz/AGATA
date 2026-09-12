@@ -4,7 +4,6 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import User
 from app.models.workspace import WorkspaceMembership, WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
@@ -60,7 +59,7 @@ ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
 
 
 def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> WorkspaceMembership:
-    """Create the system roles/permissions and migrate a legacy user into Owner access."""
+    """Create system roles/permissions and migrate a legacy user into Owner access."""
     permissions_by_key: dict[str, WorkspacePermission] = {}
     for key, description in PERMISSIONS.items():
         permission = db.scalar(select(WorkspacePermission).where(WorkspacePermission.key == key))
@@ -114,6 +113,8 @@ def has_permission(db: Session, user: User, permission_key: str) -> bool:
 
 
 def require_permission(permission_key: str) -> Callable:
+    from app.api.deps import get_current_user
+
     def dependency(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> User:
         if not has_permission(db, user, permission_key):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permission required: {permission_key}")
