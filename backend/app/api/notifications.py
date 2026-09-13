@@ -38,7 +38,7 @@ def _sync_notifications(db: Session, user: User) -> None:
     contractor_ids = {document.contractor_id for document in documents if document.contractor_id}
     contractors = {
         contractor.id: contractor.name
-        for contractor in db.scalars(select(Contractor).where(Document.company_id == user.company_id, Contractor.id.in_(contractor_ids) if contractor_ids else False)).all()
+        for contractor in db.scalars(select(Contractor).where(Contractor.company_id == user.company_id, Contractor.id.in_(contractor_ids) if contractor_ids else False)).all()
     }
     mapped_ids = {
         match.document_id
