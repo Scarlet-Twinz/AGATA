@@ -16,6 +16,7 @@ from app.api.project_readiness import router as project_readiness_router
 from app.api.project_workflow import router as project_workflow_router
 from app.api.readiness_decisions import router as readiness_decisions_router
 from app.api.readiness_management import router as readiness_management_router
+from app.api.remediation import router as remediation_router
 from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
 from app.api.rumi import router as rumi_router
@@ -27,6 +28,7 @@ from app.models import auth_security  # noqa: F401
 from app.models import entities  # noqa: F401
 from app.models import evidence_intelligence  # noqa: F401
 from app.models import readiness_decision  # noqa: F401
+from app.models import remediation  # noqa: F401
 from app.models import rumi  # noqa: F401
 from app.models import workspace  # noqa: F401
 from app.services.rbac import enforce_request_permission
@@ -73,6 +75,7 @@ app.include_router(contractor_management_router)
 app.include_router(evidence_intelligence_router)
 app.include_router(readiness_management_router)
 app.include_router(readiness_decisions_router)
+app.include_router(remediation_router)
 app.include_router(notifications_router)
 app.include_router(rumi_router)
 app.include_router(insights_router)
