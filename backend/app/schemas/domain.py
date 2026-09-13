@@ -50,6 +50,7 @@ class ProjectCreate(BaseModel):
 class ProjectResponse(ProjectCreate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+    name: str
     status: str
 
 
@@ -172,6 +173,8 @@ class ReadinessItemResponse(BaseModel):
     explanation: str | None
     missing_requirements: list[str]
     checked_at: datetime | None
+    decision_status: str | None = None
+    decision_reason: str | None = None
 
 
 class DashboardProject(BaseModel):
