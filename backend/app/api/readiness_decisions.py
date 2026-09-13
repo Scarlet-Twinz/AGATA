@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.entities import Contractor, Project, ProjectContractor, User
 from app.models.readiness_decision import ReadinessDecision, ReadinessDecisionStatus
