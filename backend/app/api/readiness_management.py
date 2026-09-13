@@ -41,27 +41,41 @@ def _sync_remediation_tasks(db: Session, company_id: UUID, user_id: UUID, projec
         .where(ProjectRequirement.project_id == project_id, Requirement.company_id == company_id)
     ).all()
     requirement_by_name = {requirement.name: requirement for requirement in requirements}
-    active_tasks = db.scalars(
+    tasks = db.scalars(
         select(RemediationTask).where(
             RemediationTask.company_id == company_id,
             RemediationTask.project_id == project_id,
             RemediationTask.contractor_id == contractor_id,
-            RemediationTask.status.in_([RemediationStatus.OPEN.value, RemediationStatus.IN_PROGRESS.value]),
         )
     ).all()
-    active_by_source = {item.source_key: item for item in active_tasks}
+    tasks_by_source = {item.source_key: item for item in tasks}
+    prefix = f"readiness:{project_id}:{contractor_id}:"
 
     if result["status"] == "ready":
-        for item in active_tasks:
-            if item.source_key.startswith(f"readiness:{project_id}:{contractor_id}:"):
+        for item in tasks:
+            if item.source_key.startswith(prefix) and item.status in {RemediationStatus.OPEN.value, RemediationStatus.IN_PROGRESS.value}:
                 item.status = RemediationStatus.COMPLETED.value
         return
 
     for name in missing_names:
         requirement = requirement_by_name.get(name)
         requirement_id = requirement.id if requirement else None
-        source_key = f"readiness:{project_id}:{contractor_id}:{requirement_id or name}"
-        if source_key in active_by_source:
+        source_key = f"{prefix}{requirement_id or name}"
+        existing = tasks_by_source.get(source_key)
+        if existing is not None:
+            if existing.status in {RemediationStatus.COMPLETED.value, RemediationStatus.CANCELLED.value}:
+                existing.status = RemediationStatus.OPEN.value
+                existing.completed_at = None
+                existing.priority = RemediationPriority.CRITICAL.value if result["status"] == "not_ready" else RemediationPriority.HIGH.value
+                record_audit(
+                    db,
+                    company_id=company_id,
+                    user_id=user_id,
+                    action="remediation.reopened",
+                    entity_type="remediation_task",
+                    entity_id=existing.id,
+                    description=f"Reopened remediation task from an active readiness gap: {name}.",
+                )
             continue
         priority = RemediationPriority.CRITICAL.value if result["status"] == "not_ready" else RemediationPriority.HIGH.value
         task = RemediationTask(
