@@ -12,6 +12,7 @@ from app.api.evidence_intelligence import router as evidence_intelligence_router
 from app.api.evidence_management import router as evidence_management_router
 from app.api.insights import router as insights_router
 from app.api.notifications import router as notifications_router
+from app.api.project_readiness import router as project_readiness_router
 from app.api.project_workflow import router as project_workflow_router
 from app.api.readiness_decisions import router as readiness_decisions_router
 from app.api.readiness_management import router as readiness_management_router
@@ -66,6 +67,7 @@ app.include_router(dashboard_consistency_router)
 app.include_router(evidence_management_router)
 app.include_router(resources_router)
 app.include_router(project_workflow_router)
+app.include_router(project_readiness_router)
 app.include_router(requirement_management_router)
 app.include_router(contractor_management_router)
 app.include_router(evidence_intelligence_router)
