@@ -20,6 +20,7 @@ from app.models.entities import (
     Requirement,
     User,
 )
+from app.models.evidence_intelligence import EvidenceIntelligence
 from app.models.rumi import RumiConversation, RumiMessageRecord
 from app.services.readiness import calculate_readiness
 from app.services.rumi import stream_rumi
@@ -61,6 +62,11 @@ def _workspace_context(db: Session, company_id) -> str:
     projects = db.scalars(select(Project).where(Project.company_id == company_id).order_by(Project.name.asc())).all()
     requirements = db.scalars(select(Requirement).where(Requirement.company_id == company_id).order_by(Requirement.name.asc())).all()
     documents = db.scalars(select(Document).where(Document.company_id == company_id).order_by(Document.created_at.desc())).all()
+    intelligence_rows = db.scalars(
+        select(EvidenceIntelligence)
+        .join(Document, Document.id == EvidenceIntelligence.document_id)
+        .where(Document.company_id == company_id)
+    ).all()
     assignments = db.execute(
         select(ProjectContractor.project_id, ProjectContractor.contractor_id)
         .join(Project, Project.id == ProjectContractor.project_id)
@@ -82,6 +88,7 @@ def _workspace_context(db: Session, company_id) -> str:
 
     project_names = {project.id: project.name for project in projects}
     contractor_names = {contractor.id: contractor.name for contractor in contractors}
+    intelligence_by_document = {item.document_id: item for item in intelligence_rows}
     assigned_by_project: dict[object, list[str]] = {}
     for project_id, contractor_id in assignments:
         assigned_by_project.setdefault(project_id, []).append(contractor_names.get(contractor_id, "Unknown contractor"))
@@ -120,7 +127,7 @@ def _workspace_context(db: Session, company_id) -> str:
     else:
         lines.append("- No projects yet.")
 
-    lines.extend(["", "EVIDENCE:"])
+    lines.extend(["", "EVIDENCE INTELLIGENCE:"])
     if documents:
         for document in documents:
             if document.expires_at is None:
@@ -131,9 +138,22 @@ def _workspace_context(db: Session, company_id) -> str:
                 expiry = document.expires_at.date().isoformat()
             mapped = ", ".join(mapped_by_document.get(document.id, [])) or "unmapped"
             contractor = contractor_names.get(document.contractor_id, "unassigned")
+            intelligence = intelligence_by_document.get(document.id)
+            if intelligence is None:
+                intelligence_state = "legacy/no intelligence record"
+            else:
+                intelligence_state = (
+                    f"verification={intelligence.verification_status}; "
+                    f"review={intelligence.review_status}; "
+                    f"source={intelligence.source_type}; "
+                    f"confidence={intelligence.confidence if intelligence.confidence is not None else 'not set'}"
+                )
+                if intelligence.rejection_reason:
+                    intelligence_state += f"; rejection_reason={intelligence.rejection_reason}"
             lines.append(
                 f"- {document.name} | Type: {document.document_type} | Contractor: {contractor} | "
-                f"Status: {document.status} | Expiry: {expiry} | Mapped requirements: {mapped}"
+                f"Status: {document.status} | Expiry: {expiry} | Mapped requirements: {mapped} | "
+                f"Intelligence: {intelligence_state}"
             )
     else:
         lines.append("- No evidence records yet.")
@@ -205,7 +225,8 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
             "READINESS RULES: Report the exact current project-contractor result, including status, score, and explanation. "
             "Do not turn one project's result into a global contractor status. If multiple projects exist, show each relevant project. "
             "The current readiness facts are calculated from the current requirements and evidence, not from stale historical checks.\n\n"
-            "EVIDENCE RULES: Identify evidence by name. Explain actual attention reasons such as expired, expiring, invalid, or unmapped only when the supplied data supports them.\n\n"
+            "EVIDENCE RULES: Use the evidence intelligence state when present. Explain actual attention reasons such as expired, expiring, unverified, rejected, requires review, invalid, or unmapped only when the supplied data supports them. "
+            "Do not describe legacy/no-intelligence evidence as verified.\n\n"
             "GREETING/IDENTITY RULES: If asked who you are, say you are Rumi, AGATA's compliance intelligence assistant. Keep it brief. "
             "If the answer is not supported by the supplied data, say so instead of guessing. Keep answers concise and practical.\n\n"
             + context
