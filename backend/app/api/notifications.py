@@ -17,6 +17,7 @@ from app.models.entities import (
     ProjectContractor,
     User,
 )
+from app.models.readiness_decision import ReadinessDecision
 from app.schemas.domain import NotificationResponse, NotificationUnreadCount
 from app.services.readiness import calculate_readiness
 
@@ -60,6 +61,8 @@ def _sync_notifications(db: Session, user: User) -> None:
     latest_checks: dict[tuple[UUID, UUID], ComplianceCheck] = {}
     for check in check_rows:
         latest_checks.setdefault((check.project_id, check.contractor_id), check)
+    decisions = db.scalars(select(ReadinessDecision).where(ReadinessDecision.company_id == user.company_id)).all()
+    decision_map = {(item.project_id, item.contractor_id): item for item in decisions}
     project_map = {project.id: project.name for project in db.scalars(select(Project).where(Project.company_id == user.company_id)).all()}
     contractor_map = {contractor.id: contractor.name for contractor in db.scalars(select(Contractor).where(Contractor.company_id == user.company_id)).all()}
 
@@ -73,12 +76,17 @@ def _sync_notifications(db: Session, user: User) -> None:
             current[source_key] = {"kind": "readiness_unevaluated", "severity": "info", "title": f"Readiness check needed: {contractor_name}", "description": f"{contractor_name} is assigned to {project_name}, but readiness has not been evaluated yet.", "href": "/readiness"}
             continue
         result = calculate_readiness(db, user.company_id, assignment.project_id, assignment.contractor_id)
+        decision = decision_map.get(key)
         if result["status"] == "not_ready":
             missing = result.get("missing_requirements") or []
             detail = ", ".join(missing[:3]) if missing else "required evidence"
             current[source_key] = {"kind": "readiness_not_ready", "severity": "critical", "title": f"Contractor not ready: {contractor_name}", "description": f"{contractor_name} is not ready for {project_name}. Missing or invalid evidence: {detail}.", "href": "/readiness"}
         elif result["status"] == "attention":
             current[source_key] = {"kind": "readiness_attention", "severity": "warning", "title": f"Readiness needs attention: {contractor_name}", "description": f"{contractor_name} needs attention before being considered fully ready for {project_name}.", "href": "/readiness"}
+        elif decision is None or decision.status.value == "pending":
+            current[f"decision:{assignment.project_id}:{assignment.contractor_id}"] = {"kind": "readiness_decision_pending", "severity": "warning", "title": f"Readiness ready for decision: {contractor_name}", "description": f"{contractor_name} is Ready for {project_name}. Review and record the organizational readiness decision.", "href": f"/projects/{assignment.project_id}/contractors/{assignment.contractor_id}"}
+        elif decision.status.value == "approved" and result["status"] != "ready":
+            current[f"decision:{assignment.project_id}:{assignment.contractor_id}:stale"] = {"kind": "readiness_decision_stale", "severity": "critical", "title": f"Approved readiness changed: {contractor_name}", "description": f"{contractor_name}'s approved readiness for {project_name} is no longer Ready. Review the current evidence and decision.", "href": f"/projects/{assignment.project_id}/contractors/{assignment.contractor_id}"}
 
     existing = db.scalars(select(Notification).where(Notification.company_id == user.company_id)).all()
     existing_by_key = {item.source_key: item for item in existing}
@@ -122,7 +130,6 @@ def unread_count(db: Session = Depends(get_db), user: User = Depends(get_current
 def mark_read(notification_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     item = db.scalar(select(Notification).where(Notification.id == notification_id, Notification.company_id == user.company_id))
     if not item:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Notification not found")
     item.read_at = datetime.now(timezone.utc)
     db.commit()
