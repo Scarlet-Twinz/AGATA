@@ -5,8 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, ReadinessStatus, User
+from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, ProjectRequirement, ReadinessStatus, Requirement, User
 from app.models.readiness_decision import ReadinessDecision
+from app.models.remediation import RemediationPriority, RemediationStatus, RemediationTask
 from app.schemas.domain import ReadinessItemResponse, ReadinessResponse
 from app.services.audit import record_audit
 from app.services.rbac import require_permission
@@ -30,6 +31,60 @@ def _assignment_or_404(db: Session, project_id: UUID, contractor_id: UUID, compa
     if not assignment:
         raise HTTPException(status_code=404, detail="Contractor is not assigned to this project")
     return assignment
+
+
+def _sync_remediation_tasks(db: Session, company_id: UUID, user_id: UUID, project_id: UUID, contractor_id: UUID, result: dict) -> None:
+    missing_names = set(result.get("missing_requirements") or [])
+    requirements = db.scalars(
+        select(Requirement)
+        .join(ProjectRequirement, ProjectRequirement.requirement_id == Requirement.id)
+        .where(ProjectRequirement.project_id == project_id, Requirement.company_id == company_id)
+    ).all()
+    requirement_by_name = {requirement.name: requirement for requirement in requirements}
+    active_tasks = db.scalars(
+        select(RemediationTask).where(
+            RemediationTask.company_id == company_id,
+            RemediationTask.project_id == project_id,
+            RemediationTask.contractor_id == contractor_id,
+            RemediationTask.status.in_([RemediationStatus.OPEN.value, RemediationStatus.IN_PROGRESS.value]),
+        )
+    ).all()
+    active_by_source = {item.source_key: item for item in active_tasks}
+
+    if result["status"] == "ready":
+        for item in active_tasks:
+            if item.source_key.startswith(f"readiness:{project_id}:{contractor_id}:"):
+                item.status = RemediationStatus.COMPLETED.value
+        return
+
+    for name in missing_names:
+        requirement = requirement_by_name.get(name)
+        requirement_id = requirement.id if requirement else None
+        source_key = f"readiness:{project_id}:{contractor_id}:{requirement_id or name}"
+        if source_key in active_by_source:
+            continue
+        priority = RemediationPriority.CRITICAL.value if result["status"] == "not_ready" else RemediationPriority.HIGH.value
+        task = RemediationTask(
+            company_id=company_id,
+            project_id=project_id,
+            contractor_id=contractor_id,
+            requirement_id=requirement_id,
+            title=f"Resolve readiness gap: {name}",
+            description=f"Address the evidence gap for {name} so this contractor can be reassessed for project readiness.",
+            priority=priority,
+            status=RemediationStatus.OPEN.value,
+            source_key=source_key,
+        )
+        db.add(task)
+        record_audit(
+            db,
+            company_id=company_id,
+            user_id=user_id,
+            action="remediation.created",
+            entity_type="remediation_task",
+            entity_id=task.id,
+            description=f"Created remediation task from readiness gap: {name}.",
+        )
 
 
 @router.get("/readiness", response_model=list[ReadinessItemResponse])
@@ -145,6 +200,7 @@ def evaluate_readiness(
         explanation=result["explanation"],
     )
     db.add(check)
+    _sync_remediation_tasks(db, user.company_id, user.id, project_id, contractor_id, result)
     record_audit(
         db,
         company_id=user.company_id,
