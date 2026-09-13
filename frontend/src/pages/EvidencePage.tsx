@@ -27,7 +27,7 @@ function Icon({ name, size = 18 }: { name: "search" | "plus" | "file" | "arrow" 
 
 function dateLabel(value: string | null) { if (!value) return "No expiry"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); }
 function toIsoDate(value: string) { return value ? new Date(`${value}T23:59:59`).toISOString() : null; }
-function stateLabel(value: EvidenceState) { return ({ valid: "Valid", expiring: "Expiring soon", expired: "Expired", unmapped: "Unmapped", inactive: "Inactive", unverified: "Unverified", rejected: "Rejected", requires_review: "Requires review" })[value]; }
+function stateLabel(value: string) { return ({ valid: "Valid", expiring: "Expiring soon", expired: "Expired", unmapped: "Unmapped", inactive: "Inactive", unverified: "Unverified", rejected: "Rejected", requires_review: "Requires review", all: "Total evidence" } as Record<string, string>)[value] ?? value.replace("_", " "); }
 function stateClass(value: string) { return value.replace("_", "-"); }
 
 export default function EvidencePage() {
