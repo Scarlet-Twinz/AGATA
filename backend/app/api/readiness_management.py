@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.entities import ComplianceCheck, Contractor, Project, ProjectContractor, ReadinessStatus, User
+from app.models.readiness_decision import ReadinessDecision
 from app.schemas.domain import ReadinessItemResponse, ReadinessResponse
 from app.services.audit import record_audit
 from app.services.rbac import require_permission
@@ -84,6 +85,15 @@ def list_readiness(
     for check in checks:
         latest_checks.setdefault((check.project_id, check.contractor_id), check)
 
+    decisions = db.scalars(
+        select(ReadinessDecision).where(
+            ReadinessDecision.company_id == user.company_id,
+            ReadinessDecision.project_id.in_(project_ids),
+            ReadinessDecision.contractor_id.in_(contractor_ids),
+        )
+    ).all()
+    decision_by_assignment = {(item.project_id, item.contractor_id): item for item in decisions}
+
     response: list[ReadinessItemResponse] = []
     for assignment in assignments:
         project = projects.get(assignment.project_id)
@@ -92,6 +102,7 @@ def list_readiness(
             continue
         key = (assignment.project_id, assignment.contractor_id)
         check = latest_checks.get(key)
+        decision = decision_by_assignment.get(key)
         current = calculate_readiness(db, user.company_id, assignment.project_id, assignment.contractor_id)
         response.append(
             ReadinessItemResponse(
@@ -106,6 +117,8 @@ def list_readiness(
                 explanation=check.explanation if check else None,
                 missing_requirements=current["missing_requirements"] if check else [],
                 checked_at=check.checked_at if check else None,
+                decision_status=decision.status.value if decision else None,
+                decision_reason=decision.reason if decision else None,
             )
         )
     return response
