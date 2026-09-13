@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.models.entities import (
     ProjectContractor,
     User,
 )
+from app.models.evidence_intelligence import EvidenceIntelligence
 from app.models.readiness_decision import ReadinessDecision
 from app.schemas.domain import NotificationResponse, NotificationUnreadCount
 from app.services.readiness import calculate_readiness
@@ -37,12 +38,18 @@ def _sync_notifications(db: Session, user: User) -> None:
     contractor_ids = {document.contractor_id for document in documents if document.contractor_id}
     contractors = {
         contractor.id: contractor.name
-        for contractor in db.scalars(select(Contractor).where(Contractor.company_id == user.company_id, Contractor.id.in_(contractor_ids) if contractor_ids else False)).all()
+        for contractor in db.scalars(select(Contractor).where(Document.company_id == user.company_id, Contractor.id.in_(contractor_ids) if contractor_ids else False)).all()
     }
     mapped_ids = {
         match.document_id
         for match in db.scalars(select(DocumentRequirementMatch).where(DocumentRequirementMatch.document_id.in_([document.id for document in documents]) if documents else False)).all()
     }
+    intelligence_rows = db.scalars(
+        select(EvidenceIntelligence)
+        .join(Document, Document.id == EvidenceIntelligence.document_id)
+        .where(Document.company_id == user.company_id)
+    ).all()
+    intelligence_by_document = {item.document_id: item for item in intelligence_rows}
 
     for document in documents:
         if document.status != "active":
@@ -55,6 +62,14 @@ def _sync_notifications(db: Session, user: User) -> None:
             current[f"evidence:{document.id}:expiry"] = {"kind": "evidence_expiring", "severity": "warning", "title": f"Evidence expiring soon: {document.name}", "description": f"{contractor_name}'s {document.document_type} evidence expires in {max(days, 0)} day(s). Review it before it becomes invalid.", "href": "/evidence"}
         if document.id not in mapped_ids:
             current[f"evidence:{document.id}:mapping"] = {"kind": "evidence_unmapped", "severity": "info", "title": f"Evidence needs mapping: {document.name}", "description": f"{document.name} is active but is not mapped to a requirement, so it cannot contribute to a readiness decision.", "href": "/evidence"}
+        intelligence = intelligence_by_document.get(document.id)
+        if intelligence is not None:
+            if intelligence.verification_status == "unverified":
+                current[f"evidence:{document.id}:verification"] = {"kind": "evidence_unverified", "severity": "warning", "title": f"Evidence needs verification: {document.name}", "description": f"{document.name} has not been verified and should not be relied on as validated evidence yet.", "href": "/evidence"}
+            elif intelligence.verification_status == "rejected":
+                current[f"evidence:{document.id}:verification"] = {"kind": "evidence_rejected", "severity": "critical", "title": f"Evidence rejected: {document.name}", "description": f"{document.name} was rejected during evidence review. Replace or correct it before relying on it for readiness.", "href": "/evidence"}
+            elif intelligence.review_status == "pending":
+                current[f"evidence:{document.id}:review"] = {"kind": "evidence_requires_review", "severity": "warning", "title": f"Evidence review required: {document.name}", "description": f"{document.name} is mapped but still requires review before it can contribute to a readiness decision.", "href": "/evidence"}
 
     assignments = db.scalars(select(ProjectContractor).join(Project, Project.id == ProjectContractor.project_id).join(Contractor, Contractor.id == ProjectContractor.contractor_id).where(Project.company_id == user.company_id, Contractor.company_id == user.company_id)).all()
     check_rows = db.scalars(select(ComplianceCheck).where(ComplianceCheck.company_id == user.company_id).order_by(ComplianceCheck.checked_at.desc())).all()
