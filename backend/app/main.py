@@ -13,6 +13,7 @@ from app.api.evidence_management import router as evidence_management_router
 from app.api.insights import router as insights_router
 from app.api.notifications import router as notifications_router
 from app.api.project_workflow import router as project_workflow_router
+from app.api.readiness_decisions import router as readiness_decisions_router
 from app.api.readiness_management import router as readiness_management_router
 from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
@@ -24,6 +25,7 @@ from app.db.session import Base, engine
 from app.models import auth_security  # noqa: F401
 from app.models import entities  # noqa: F401
 from app.models import evidence_intelligence  # noqa: F401
+from app.models import readiness_decision  # noqa: F401
 from app.models import rumi  # noqa: F401
 from app.models import workspace  # noqa: F401
 from app.services.rbac import enforce_request_permission
@@ -61,8 +63,6 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_router)
 app.include_router(dashboard_consistency_router)
-# Evidence-management routes intentionally precede the legacy resource routes so
-# lifecycle operations (mapping, updates, deletes) use the audited implementation.
 app.include_router(evidence_management_router)
 app.include_router(resources_router)
 app.include_router(project_workflow_router)
@@ -70,6 +70,7 @@ app.include_router(requirement_management_router)
 app.include_router(contractor_management_router)
 app.include_router(evidence_intelligence_router)
 app.include_router(readiness_management_router)
+app.include_router(readiness_decisions_router)
 app.include_router(notifications_router)
 app.include_router(rumi_router)
 app.include_router(insights_router)
