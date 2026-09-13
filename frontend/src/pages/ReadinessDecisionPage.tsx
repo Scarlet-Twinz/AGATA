@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 type Decision = { id: string; project_id: string; contractor_id: string; status: "pending" | "approved" | "rejected"; decided_by_user_id: string | null; decided_at: string | null; reason: string | null };
 type ReadinessItem = { project_id: string; contractor_id: string; evaluated: boolean; score: number | null; status: string | null; explanation: string | null; missing_requirements: string[]; checked_at: string | null };
-function label(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
+function label(value: string | null) { return value ? value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Not evaluated"; }
 
 export default function ReadinessDecisionPage() {
   const { projectId, contractorId } = useParams();
