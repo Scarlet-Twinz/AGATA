@@ -265,6 +265,17 @@ def create_trace(
     compliance_check_id: UUID | None,
     intelligence: dict,
 ) -> ReadinessTrace:
+    existing = db.scalar(
+        select(ReadinessTrace).where(
+            ReadinessTrace.company_id == company_id,
+            ReadinessTrace.project_id == project_id,
+            ReadinessTrace.contractor_id == contractor_id,
+            ReadinessTrace.fingerprint == intelligence["fingerprint"],
+        )
+    )
+    if existing is not None:
+        return existing
+
     trace = ReadinessTrace(
         company_id=company_id,
         project_id=project_id,
