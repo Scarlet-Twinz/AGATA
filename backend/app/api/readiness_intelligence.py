@@ -51,7 +51,6 @@ def _trace_timeline_item(trace: ReadinessTrace, previous: ReadinessTrace | None)
         "status": trace.status,
         "explanation": trace.explanation,
         "fingerprint": trace.fingerprint,
-        "engine_version": trace.engine_version,
         "requirement_count": len(trace.requirements_snapshot or []),
         "evidence_count": len(trace.evidence_snapshot or []),
         "blocker_count": len(trace.blockers_snapshot or []),
@@ -138,7 +137,6 @@ def readiness_intelligence(
             "id": latest.id,
             "created_at": latest.created_at,
             "fingerprint": latest.fingerprint,
-            "engine_version": latest.engine_version,
         }
     if len(traces) > 1:
         previous = traces[1]
