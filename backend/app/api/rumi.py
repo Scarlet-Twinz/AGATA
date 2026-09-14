@@ -242,6 +242,11 @@ def conversations(db: Session = Depends(get_db), user: User = Depends(get_curren
     return [ConversationResponse.model_validate(item) for item in items]
 
 
+@router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
+def conversation_detail(conversation_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ConversationResponse:
+    return ConversationResponse.model_validate(_get_conversation(db, user, conversation_id))
+
+
 @router.post("/conversations", response_model=ConversationResponse, status_code=201)
 def create_conversation(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ConversationResponse:
     conversation = RumiConversation(user_id=user.id, company_id=user.company_id, title="New conversation")
