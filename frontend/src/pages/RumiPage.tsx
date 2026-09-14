@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, streamApi } from "../lib/api";
 
 type Message = { role: "user" | "assistant"; content: string; created_at?: string };
@@ -37,6 +37,7 @@ function conversationDate(value: string) {
 }
 
 export default function RumiPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,6 +51,7 @@ export default function RumiPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pendingPromptRef = useRef<string | null>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !sending && !loadingHistory && !loadingConversation, [input, sending, loadingHistory, loadingConversation]);
   const filteredConversations = useMemo(() => {
@@ -78,6 +80,11 @@ export default function RumiPage() {
   }
 
   useEffect(() => {
+    const prompt = searchParams.get("prompt");
+    pendingPromptRef.current = prompt?.trim() || null;
+  }, [searchParams]);
+
+  useEffect(() => {
     let active = true;
     async function loadHistory() {
       setLoadingHistory(true);
@@ -101,6 +108,15 @@ export default function RumiPage() {
   // loadConversation is intentionally used only for initial hydration.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const prompt = pendingPromptRef.current;
+    if (!prompt || loadingHistory || loadingConversation || !conversation) return;
+    setInput(prompt);
+    pendingPromptRef.current = null;
+    setSearchParams({}, { replace: true });
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }, [conversation, loadingHistory, loadingConversation, setSearchParams]);
 
   async function newChat() {
     if (sending || loadingConversation) return;
@@ -150,11 +166,8 @@ export default function RumiPage() {
       setConversations(remaining);
       setMenuId(null);
       if (conversation?.id === id) {
-        if (remaining[0]) {
-          await loadConversation(remaining[0].id, remaining);
-        } else {
-          await newChat();
-        }
+        if (remaining[0]) await loadConversation(remaining[0].id, remaining);
+        else await newChat();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "The conversation could not be deleted.");
@@ -170,8 +183,6 @@ export default function RumiPage() {
       setConversation(activeConversation);
       setConversations((current) => current.some((item) => item.id === activeConversation?.id) ? current : [activeConversation as Conversation, ...current]);
     }
-    // The API accepts at most 20 incoming messages. Keep the newest 19 existing
-    // messages so the new user message always fits the contract.
     const next: Message[] = [...messages.slice(-19), { role: "user", content }];
     setMessages([...next, { role: "assistant", content: "" }]);
     setInput("");
