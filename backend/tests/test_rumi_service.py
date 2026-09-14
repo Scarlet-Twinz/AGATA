@@ -1,13 +1,12 @@
+import asyncio
 from types import SimpleNamespace
 
 import httpx
-import pytest
 
 from app.services import rumi
 
 
-@pytest.mark.asyncio
-async def test_historical_trace_retries_without_live_workspace_context(monkeypatch):
+def test_historical_trace_retries_without_live_workspace_context(monkeypatch):
     calls: list[list[dict[str, str]]] = []
 
     async def fake_stream(messages, url, model, timeout_seconds):
@@ -39,7 +38,7 @@ async def test_historical_trace_retries_without_live_workspace_context(monkeypat
         },
     ]
 
-    chunks = [chunk async for chunk in rumi.stream_rumi(messages)]
+    chunks = asyncio.run(collect(rumi.stream_rumi(messages)))
 
     assert chunks == ["historical answer"]
     assert len(calls) == 2
@@ -50,8 +49,7 @@ async def test_historical_trace_retries_without_live_workspace_context(monkeypat
     assert calls[1][1] == messages[-1]
 
 
-@pytest.mark.asyncio
-async def test_non_historical_timeout_does_not_retry_with_unrelated_context(monkeypatch):
+def test_non_historical_timeout_does_not_retry_with_unrelated_context(monkeypatch):
     calls = 0
 
     async def fake_stream(messages, url, model, timeout_seconds):
@@ -76,7 +74,11 @@ async def test_non_historical_timeout_does_not_retry_with_unrelated_context(monk
         {"role": "user", "content": "What projects do I have?"},
     ]
 
-    chunks = [chunk async for chunk in rumi.stream_rumi(messages)]
+    chunks = asyncio.run(collect(rumi.stream_rumi(messages)))
 
     assert chunks == ["Rumi is temporarily unavailable: ReadTimeout."]
     assert calls == 1
+
+
+async def collect(stream):
+    return [chunk async for chunk in stream]
