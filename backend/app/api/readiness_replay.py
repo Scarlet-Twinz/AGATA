@@ -19,6 +19,12 @@ def _names(items: list | None, key: str = "requirement_name") -> list[str]:
     return [str(item.get(key)) for item in (items or []) if item.get(key)]
 
 
+def _trace_blocker_transition(trace: ReadinessTrace, previous: ReadinessTrace | None) -> tuple[list[str], list[str]]:
+    current_blockers = set(_names(trace.blockers_snapshot))
+    previous_blockers = set(_names(previous.blockers_snapshot if previous else None))
+    return sorted(current_blockers - previous_blockers), sorted(previous_blockers - current_blockers)
+
+
 @router.get("/projects/{project_id}/contractors/{contractor_id}/replay/{trace_id}")
 def readiness_replay(
     project_id: UUID,
@@ -59,9 +65,8 @@ def readiness_replay(
         .limit(1)
     )
     current = build_readiness_intelligence(db, user.company_id, project_id, contractor_id)
+    blockers_added, blockers_resolved = _trace_blocker_transition(trace, previous)
 
-    current_blockers = set(_names(trace.blockers_snapshot))
-    previous_blockers = set(_names(previous.blockers_snapshot if previous else None))
     return {
         "trace_id": trace.id,
         "project_id": project_id,
@@ -85,10 +90,10 @@ def readiness_replay(
             "from_status": previous.status if previous else None,
             "score_delta": trace.score - previous.score if previous else None,
             "status_changed": bool(previous and trace.status != previous.status),
-            "blockers_added": sorted(current_blockers - previous_blockers) if previous else [],
-            "blockers_resolved": sorted(previous_blockers - current_blockers) if previous else [],
+            "blockers_added": blockers_added,
+            "blockers_resolved": blockers_resolved,
         },
     }
 
 
-__all__ = ["router"]
+__all__ = ["_names", "_trace_blocker_transition", "router"]
