@@ -265,16 +265,18 @@ def create_trace(
     compliance_check_id: UUID | None,
     intelligence: dict,
 ) -> ReadinessTrace:
-    existing = db.scalar(
-        select(ReadinessTrace).where(
+    latest = db.scalar(
+        select(ReadinessTrace)
+        .where(
             ReadinessTrace.company_id == company_id,
             ReadinessTrace.project_id == project_id,
             ReadinessTrace.contractor_id == contractor_id,
-            ReadinessTrace.fingerprint == intelligence["fingerprint"],
         )
+        .order_by(ReadinessTrace.created_at.desc())
+        .limit(1)
     )
-    if existing is not None:
-        return existing
+    if latest is not None and latest.fingerprint == intelligence["fingerprint"]:
+        return latest
 
     trace = ReadinessTrace(
         company_id=company_id,
