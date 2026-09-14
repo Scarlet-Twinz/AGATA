@@ -44,6 +44,12 @@ def readiness_intelligence(project_id: UUID, contractor_id: UUID, db: Session = 
         raise HTTPException(status_code=404, detail="Contractor is not assigned to this project")
     current = build_readiness_intelligence(db, user.company_id, project_id, contractor_id)
     traces = db.scalars(select(ReadinessTrace).where(ReadinessTrace.company_id == user.company_id, ReadinessTrace.project_id == project_id, ReadinessTrace.contractor_id == contractor_id).order_by(ReadinessTrace.created_at.desc()).limit(2)).all()
+    if not traces or traces[0].fingerprint != current["fingerprint"]:
+        trace = create_trace(db, company_id=user.company_id, project_id=project_id, contractor_id=contractor_id, compliance_check_id=None, intelligence=current)
+        db.commit()
+        db.refresh(trace)
+        traces = [trace, *traces]
+        traces = traces[:2]
     current["latest_trace"] = None
     current["previous_trace"] = None
     if traces:
@@ -80,22 +86,8 @@ def simulate(project_id: UUID, contractor_id: UUID, payload: ReadinessScenarioRe
     return simulate_readiness(db, user.company_id, project_id, contractor_id, payload.repair_evidence_ids, payload.provide_requirement_ids)
 
 
-def create_trace(db: Session, *, company_id: UUID, project_id: UUID, contractor_id: UUID, compliance_check_id: UUID, intelligence: dict) -> ReadinessTrace:
-    trace = ReadinessTrace(
-        company_id=company_id,
-        project_id=project_id,
-        contractor_id=contractor_id,
-        compliance_check_id=compliance_check_id,
-        engine_version=intelligence["engine_version"],
-        score=intelligence["score"],
-        status=intelligence["status"],
-        explanation=intelligence["explanation"],
-        requirements_snapshot=intelligence["requirements"],
-        evidence_snapshot=intelligence["evidence"],
-        blockers_snapshot=intelligence["blockers"],
-        change_set_snapshot=intelligence["minimum_change_set"],
-        fingerprint=intelligence["fingerprint"],
-    )
+def create_trace(db: Session, *, company_id: UUID, project_id: UUID, contractor_id: UUID, compliance_check_id: UUID | None, intelligence: dict) -> ReadinessTrace:
+    trace = ReadinessTrace(company_id=company_id, project_id=project_id, contractor_id=contractor_id, compliance_check_id=compliance_check_id, engine_version=intelligence["engine_version"], score=intelligence["score"], status=intelligence["status"], explanation=intelligence["explanation"], requirements_snapshot=intelligence["requirements"], evidence_snapshot=intelligence["evidence"], blockers_snapshot=intelligence["blockers"], change_set_snapshot=intelligence["minimum_change_set"], fingerprint=intelligence["fingerprint"])
     db.add(trace)
     return trace
 
