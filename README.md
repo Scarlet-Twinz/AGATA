@@ -2,143 +2,222 @@
 
 **Compliance intelligence for contractors and project teams.**
 
-AGATA is a proprietary compliance and readiness platform designed to help businesses understand whether contractors and projects are ready to proceed. Instead of acting as a document folder, AGATA connects requirements, evidence, project context, expiry dates, alerts, and actionable readiness decisions in one operational workspace.
+AGATA is a proprietary product in active development, being built as a deployable compliance/readiness platform rather than a generic dashboard or document repository. Its core question is simple:
 
-**RUMI** is AGATA's AI intelligence layer. RUMI is designed to answer questions about the organization's own compliance data and explain why a contractor or project is ready, needs attention, or is not ready.
+> **Can this contractor satisfy the requirements for this project right now, and what needs attention?**
 
-> **Status: Active Development**
+AGATA connects requirements, evidence, project context, expiry dates, readiness decisions, remediation, alerts, audit history, and an AI intelligence layer called **RUMI** in one operational workspace.
 
-## Important notice
-
-AGATA is a proprietary product and this repository is not an open-source project. The source code, product concepts, branding, documentation, interfaces, architecture, and associated assets are owned by the repository owner unless otherwise stated.
-
-**Do not clone, copy, redistribute, rebrand, resell, publish, modify for commercial use, or create derivative products from this repository without explicit permission from the owner.**
-
-No open-source license has been granted. Until a license is explicitly added, default copyright protections apply.
-
-## Product principle
-
-AGATA does not aim to compete by being another generic CRM, document repository, or chatbot. Its core workflow is:
+## Product Model
 
 ```text
 Requirements + Evidence + Project Context
-                    |
-                    v
+                    │
+                    ▼
              Readiness Engine
-                    |
-          +---------+---------+
-          |         |         |
-          v         v         v
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
         READY    ATTENTION  NOT READY
-          |         |         |
-          +---------+---------+
-                    v
-              Recommended Action
-                    |
-                    v
+          │         │         │
+          └─────────┼─────────┘
+                    ▼
+            Recommended Action
+                    │
+                    ▼
                    RUMI
 ```
 
-The first product milestone is a business being able to create a project, assign contractors, define requirements, upload evidence, and receive an explainable readiness result.
+The important design choice is that **readiness is computed by application logic first**. RUMI is not the source of truth for compliance status; it explains and interacts with the application-owned data.
 
-## V1 scope
+## Why AGATA Is Different
+
+AGATA is intentionally narrower than a CRM, ERP, project-management suite, generic file store, or generic chatbot.
+
+The product is organized around a relationship between:
+
+- a company/workspace;
+- contractors;
+- projects;
+- project requirements;
+- evidence supplied by contractors;
+- evidence verification/review state;
+- current readiness decisions; and
+- actions required to move an entity toward readiness.
+
+That gives the platform an operational workflow instead of simply storing documents.
+
+## Current Product Scope
 
 - Company/workspace accounts
-- Authentication
+- Authentication and protected operations
 - Contractor management
 - Project management
 - Project requirements
-- Document/evidence records
-- Document metadata and expiry tracking
-- Compliance checks
-- Explainable readiness scoring
-- Alerts and action items
-- Activity history
+- Contractor/project assignments
+- Evidence and document records
+- Requirement/evidence matching
+- Evidence intelligence and review state
+- Expiry-aware readiness calculation
+- Explainable readiness scores and statuses
+- Readiness decisions
+- Remediation and action workflows
+- Notifications and activity/audit history
 - RUMI AI assistant
-- Local Ollama integration for development
+- Streaming AI responses
 - Provider-independent billing foundation
 - Responsive web application
 
-Features outside the core readiness workflow are intentionally deferred until V1 is stable.
+## Readiness Engine
+
+The readiness service evaluates a **project + contractor** pair against the project's configured requirements.
+
+Evidence can satisfy a requirement when it is valid and either explicitly mapped to the requirement or matches the supported legacy document rule. Expired evidence is excluded. Evidence intelligence can further require verification and approval before evidence is accepted for readiness.
+
+The resulting state is explicit:
+
+- `READY` — all required evidence is satisfied.
+- `ATTENTION` — some requirements are satisfied, but gaps remain within the configured threshold.
+- `NOT_READY` — the current evidence does not satisfy enough of the required set.
+- `NOT_CONFIGURED` — the project has no configured requirements.
+
+The API also exposes project-level summaries with contractor counts, readiness distribution, average score, decision counts, and the most common missing requirements.
+
+## RUMI Intelligence Layer
+
+RUMI is AGATA's in-product compliance intelligence assistant.
+
+The backend builds a company-scoped workspace snapshot containing projects, contractors, requirements, evidence, evidence-intelligence state, assignments, mappings, and current readiness calculations. RUMI is instructed to treat that application-owned snapshot as authoritative rather than inventing business facts.
+
+For deterministic questions, AGATA can answer from its own application services and database state. Language-heavy questions are routed to the configured Ollama model and streamed back to the frontend.
+
+This separation is deliberate:
+
+```text
+Application data / rules
+        │
+        ├── deterministic answers
+        │
+        └── current workspace context
+                    │
+                    ▼
+                 RUMI / Ollama
+                    │
+                    ▼
+             language reasoning
+```
+
+RUMI also has product-navigation guidance for supported AGATA destinations, but it does not pretend to perform an action that the application has not actually provided.
 
 ## Architecture
 
 ```text
-                         AGATA WEB APP
+                         AGATA Web
                     React / TypeScript / Vite
-                              |
-                       REST + SSE/stream
-                              |
-                              v
-                    +---------------------+
-                    |     FastAPI API     |
-                    | auth / projects     |
-                    | contractors / docs  |
-                    | compliance / RUMI   |
-                    +----------+----------+
-                               |
-              +----------------+----------------+
-              |                                 |
-              v                                 v
-        +-------------+                   +------------+
-        | PostgreSQL  |                   |   Ollama   |
-        | application |                   | local RUMI  |
-        | data        |                   | model       |
-        +-------------+                   +------------+
-              |
-              v
-       Object storage adapter
-       (local/dev -> production)
+                              │
+                         REST + SSE
+                              │
+                              ▼
+                       FastAPI Application
+                              │
+             ┌────────────────┼─────────────────┐
+             ▼                ▼                 ▼
+        PostgreSQL       Domain Services    RUMI Adapter
+             │                │                 │
+             │                │              Ollama
+             │                │
+             └────── Evidence / Readiness ─────┘
+                              │
+                              ▼
+                       Storage Boundary
+                    local/dev → object storage
 
-       Billing is isolated behind a
-       provider-independent service boundary.
+                     Billing Boundary
+                 provider-independent adapter
 ```
 
-## Repository layout
+## Backend Boundaries
+
+The backend is intentionally split into API, core, database, models, schemas, and services. Business rules such as readiness calculation belong in services rather than being duplicated across HTTP routes.
+
+Protected operations resolve the authenticated company/workspace before accessing company-owned records. Client-supplied IDs are not treated as sufficient authorization.
+
+## Security Principles
+
+- Passwords are hashed rather than stored as plaintext.
+- Protected routes require authenticated access.
+- Workspace/company ownership is enforced at the service boundary.
+- Secrets are environment-based and excluded from source control.
+- Audit events are first-class records.
+- Evidence metadata is separated from the broader compliance domain.
+- AI receives only the company-scoped context required for the requested operation.
+- Normal development does not depend on a destructive database reset.
+
+## Billing Direction
+
+Billing is isolated behind an application boundary so the compliance domain does not depend directly on one payment provider.
+
+The intended boundary is:
+
+```text
+AGATA Billing Service
+        │
+        ├── Provider Adapter
+        ├── Webhook Verification
+        ├── Subscription State
+        └── Payment Records
+```
+
+Provider selection for production is intentionally a product/business decision rather than something hard-coded into the core domain.
+
+## Repository Structure
 
 ```text
 AGATA/
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
+│   │   ├── api/          # HTTP routes and product boundaries
+│   │   ├── core/         # configuration/security primitives
+│   │   ├── db/           # database/session setup
+│   │   ├── models/       # persistent domain models
+│   │   ├── schemas/      # validation contracts
+│   │   ├── services/     # readiness, RUMI, domain logic
 │   │   └── main.py
 │   ├── tests/
-│   ├── requirements.txt
-│   └── .env.example
+│   └── requirements.txt
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── lib/
-│   │   ├── pages/
-│   │   └── types/
-│   ├── package.json
-│   └── .env.example
+│   └── src/
 ├── docs/
 │   └── architecture.md
-├── .gitignore
 └── README.md
 ```
 
-## Development
+## Local Development
+
+### Prerequisites
+
+- Python 3
+- Node.js and npm
+- PostgreSQL
+- Ollama for local RUMI development
 
 ### Backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The API exposes `GET /health` and `GET /docs` for local verification.
+The API exposes `/health`, `/database`, and FastAPI's `/docs` for local verification.
 
 ### Frontend
 
@@ -154,49 +233,37 @@ The frontend expects:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-### PostgreSQL
-
-AGATA uses PostgreSQL in development and production architecture. Set `DATABASE_URL` in the backend environment. The application is designed to create/update schema through controlled migrations as the project matures; no destructive reset script is included in the initial repository.
-
 ### RUMI / Ollama
-
-RUMI is intentionally separated from the HTTP API. The backend first handles deterministic questions through application services and PostgreSQL. Only questions requiring language reasoning are routed to Ollama. The Ollama adapter supports streamed responses so the frontend does not need to wait for a complete model response before displaying output.
-
-Default development configuration for the current local setup:
 
 ```env
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:3b-instruct
 ```
 
-Change `OLLAMA_MODEL` if the local Ollama installation uses a different model name. The backend does not assume that a particular model is installed.
+The model name is configuration, not a hard-coded application dependency. RUMI streams Ollama responses so the UI can render partial output as it arrives.
 
-## Security principles
+## Product Roadmap
 
-- Passwords are hashed and never stored as plaintext.
-- Protected API routes require authenticated access.
-- Company/workspace ownership is enforced at the service boundary.
-- Secrets are environment-based and excluded from source control.
-- File metadata is separated from the compliance domain model.
-- Audit events are first-class records.
-- No destructive database reset is part of the normal development workflow.
-- AI receives only the context required for the requested operation.
+The near-term priority is the core readiness workflow: make requirements, evidence, project context, readiness decisions, remediation, and RUMI useful enough to support a real operational workflow.
 
-## Billing principle
+Planned product work includes production-grade file/object storage, versioned database migrations as the schema stabilizes, production billing integration, deployment infrastructure, stronger production authentication/session controls, and continued readiness/evidence intelligence improvements.
 
-Billing is deliberately isolated from the rest of the application. AGATA will support a subscription model with a provider adapter so payment providers can be changed or expanded without rewriting the application domain.
+## Status
 
-```text
-AGATA BillingService
-        |
-        +-- Payment Provider Adapter
-        +-- Webhook Verification
-        +-- Subscription State
-        +-- Payment Records
-```
+**Active development · intended for deployment as a commercial product.**
 
-Production billing provider selection will be made after validating supported countries, currencies, recurring billing, taxes/fees, settlement, and business requirements.
+AGATA is not presented as a finished production service yet. The repository reflects an actively developed product foundation whose architecture is being shaped around a real deployment and business workflow.
 
-## License
+## Proprietary Notice
 
-No open-source license is declared for this repository. All rights remain reserved by the owner unless a written license or other explicit permission states otherwise.
+AGATA is not an open-source project. The source code, product concepts, branding, documentation, interfaces, architecture, and associated assets are proprietary unless explicitly stated otherwise.
+
+Do not clone, copy, redistribute, rebrand, resell, publish, modify for commercial use, or create derivative products from this repository without explicit permission from the owner.
+
+No open-source license has been granted. Default copyright protections apply.
+
+## Author
+
+**Anthony Emmanuella Mmasinachi**
+
+Full-stack and systems engineer building software across SaaS, backend systems, distributed processing, networking, AI integration, and systems programming.
