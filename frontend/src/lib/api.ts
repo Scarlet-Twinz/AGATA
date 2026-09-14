@@ -39,7 +39,19 @@ export async function streamApi(path: string, body: unknown, onToken: (token: st
     throw new Error("AGATA could not reach the API. Make sure the backend is running on http://127.0.0.1:8000.");
   }
 
-  if (!response.ok || !response.body) throw new Error(`Rumi request failed with ${response.status}`);
+  if (!response.ok) {
+    const message = await response.text();
+    let detail = message;
+    try {
+      const parsed = JSON.parse(message) as { detail?: unknown };
+      if (typeof parsed.detail === "string") detail = parsed.detail;
+      else if (parsed.detail) detail = JSON.stringify(parsed.detail);
+    } catch {
+      // Keep the raw response when it is not JSON.
+    }
+    throw new Error(detail || `Rumi request failed with ${response.status}`);
+  }
+  if (!response.body) throw new Error("Rumi returned no response body.");
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
