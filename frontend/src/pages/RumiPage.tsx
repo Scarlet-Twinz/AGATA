@@ -11,37 +11,18 @@ const starters = [
   "How do I create a contractor?",
 ];
 
-const allowedRumiRoutes = new Set([
-  "/dashboard",
-  "/projects",
-  "/contractors",
-  "/requirements",
-  "/evidence",
-  "/readiness",
-  "/remediation",
-  "/rumi",
-  "/insights",
-  "/notifications",
-  "/team",
-  "/settings",
-  "/billing",
-  "/usage",
-  "/audit",
-]);
+const allowedRumiRoutes = new Set(["/dashboard", "/projects", "/contractors", "/requirements", "/evidence", "/readiness", "/remediation", "/rumi", "/insights", "/notifications", "/team", "/settings", "/billing", "/usage", "/audit"]);
 
 function RumiContent({ content }: { content: string }) {
   const navigate = useNavigate();
   const parts = content.split(/(\[[^\]]+\]\([^\s)]+\))/g);
-
-  return <>
-    {parts.map((part, index) => {
-      const match = part.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
-      if (!match) return <span key={index}>{part}</span>;
-      const [, label, route] = match;
-      if (!allowedRumiRoutes.has(route)) return <span key={index}>{part}</span>;
-      return <button key={index} type="button" className="rumi-action-link" onClick={() => navigate(route)}>{label}<span>→</span></button>;
-    })}
-  </>;
+  return <>{parts.map((part, index) => {
+    const match = part.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
+    if (!match) return <span key={index}>{part}</span>;
+    const [, label, route] = match;
+    if (!allowedRumiRoutes.has(route)) return <span key={index}>{part}</span>;
+    return <button key={index} type="button" className="rumi-action-link" onClick={() => navigate(route)}>{label}<span>→</span></button>;
+  })}</>;
 }
 
 export default function RumiPage() {
@@ -84,7 +65,9 @@ export default function RumiPage() {
       activeConversation = await api<Conversation>("/api/rumi/conversations/current");
       setConversation(activeConversation);
     }
-    const next: Message[] = [...messages, { role: "user", content }];
+    // The API accepts at most 20 incoming messages. Keep the newest 19
+    // existing messages so the new user message always fits the contract.
+    const next: Message[] = [...messages.slice(-19), { role: "user", content }];
     setMessages([...next, { role: "assistant", content: "" }]);
     setInput("");
     setError("");
@@ -107,10 +90,7 @@ export default function RumiPage() {
     }
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    void sendMessage();
-  }
+  function submit(event: FormEvent) { event.preventDefault(); void sendMessage(); }
 
   return <>
     <style>{styles}</style>
@@ -119,7 +99,6 @@ export default function RumiPage() {
         <div><span className="rumi-eyebrow">INTELLIGENCE · RUMI</span><h1>Rumi</h1><p>Your compliance intelligence assistant. Ask about readiness, evidence, decisions, or how to use AGATA.</p></div>
         <div className="rumi-status"><span/> {loadingHistory ? "Loading conversation" : "Conversation saved"}</div>
       </header>
-
       <div className="rumi-workspace">
         <main className="rumi-chat-panel">
           <div className="rumi-chat-head"><div className="rumi-avatar">R</div><div><strong>Rumi</strong><span>AGATA compliance intelligence</span></div></div>
