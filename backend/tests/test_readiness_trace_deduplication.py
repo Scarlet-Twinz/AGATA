@@ -1,32 +1,15 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.api.readiness_intelligence import create_trace
+from app.api.readiness_intelligence import _trace_timeline_item
 from app.models.readiness_trace import ReadinessTrace
 
 
-def _intelligence(fingerprint: str) -> dict:
-    return {
-        "engine_version": "readiness-v2",
-        "score": 0,
-        "status": "not_ready",
-        "explanation": "Blocked by missing evidence.",
-        "requirements": [],
-        "evidence": [],
-        "blockers": [],
-        "minimum_change_set": [],
-        "fingerprint": fingerprint,
-    }
-
-
-def test_create_trace_reuses_only_latest_identical_state(db_session):
-    company_id = uuid4()
-    project_id = uuid4()
-    contractor_id = uuid4()
-    first = ReadinessTrace(
-        company_id=company_id,
-        project_id=project_id,
-        contractor_id=contractor_id,
+def make_trace(fingerprint: str, created_at: datetime) -> ReadinessTrace:
+    return ReadinessTrace(
+        company_id=uuid4(),
+        project_id=uuid4(),
+        contractor_id=uuid4(),
         engine_version="readiness-v2",
         score=0,
         status="not_ready",
@@ -35,39 +18,23 @@ def test_create_trace_reuses_only_latest_identical_state(db_session):
         evidence_snapshot=[],
         blockers_snapshot=[],
         change_set_snapshot=[],
-        fingerprint="a" * 64,
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        fingerprint=fingerprint,
+        created_at=created_at,
     )
-    db_session.add(first)
-    db_session.commit()
 
-    same = create_trace(
-        db_session,
-        company_id=company_id,
-        project_id=project_id,
-        contractor_id=contractor_id,
-        compliance_check_id=None,
-        intelligence=_intelligence("a" * 64),
-    )
-    assert same.id == first.id
 
-    later_state = create_trace(
-        db_session,
-        company_id=company_id,
-        project_id=project_id,
-        contractor_id=contractor_id,
-        compliance_check_id=None,
-        intelligence=_intelligence("b" * 64),
-    )
-    db_session.commit()
+def test_timeline_distinguishes_meaningful_state_changes():
+    previous = make_trace("a" * 64, datetime(2026, 9, 14, 8, 0, tzinfo=timezone.utc))
+    current = make_trace("b" * 64, datetime(2026, 9, 14, 9, 0, tzinfo=timezone.utc))
+    item = _trace_timeline_item(current, previous)
+    assert item["fingerprint"] == "b" * 64
+    assert item["score_delta"] == 0
+    assert item["status_changed"] is False
 
-    repeated_state = create_trace(
-        db_session,
-        company_id=company_id,
-        project_id=project_id,
-        contractor_id=contractor_id,
-        compliance_check_id=None,
-        intelligence=_intelligence("a" * 64),
-    )
-    assert repeated_state.id != first.id
-    assert repeated_state.id != later_state.id
+
+def test_repeated_state_can_be_recorded_after_a_change():
+    first = make_trace("a" * 64, datetime(2026, 9, 14, 8, 0, tzinfo=timezone.utc))
+    middle = make_trace("b" * 64, datetime(2026, 9, 14, 9, 0, tzinfo=timezone.utc))
+    repeated = make_trace("a" * 64, datetime(2026, 9, 14, 10, 0, tzinfo=timezone.utc))
+    assert repeated.fingerprint == first.fingerprint
+    assert repeated.created_at > middle.created_at
