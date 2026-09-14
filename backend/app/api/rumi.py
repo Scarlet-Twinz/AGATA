@@ -47,6 +47,10 @@ class ConversationResponse(BaseModel):
     updated_at: datetime
 
 
+class ConversationTitleUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+
+
 class MessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -160,22 +164,65 @@ def _workspace_context(db: Session, company_id) -> str:
     return "\n".join(lines)
 
 
+def _get_conversation(db: Session, user: User, conversation_id: UUID) -> RumiConversation:
+    conversation = db.scalar(
+        select(RumiConversation).where(
+            RumiConversation.id == conversation_id,
+            RumiConversation.user_id == user.id,
+            RumiConversation.company_id == user.company_id,
+        )
+    )
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Rumi conversation not found")
+    return conversation
+
+
 def _get_or_create_conversation(db: Session, user: User, conversation_id: UUID | None) -> RumiConversation:
     if conversation_id is not None:
-        conversation = db.scalar(select(RumiConversation).where(RumiConversation.id == conversation_id, RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id))
-        if conversation is None:
-            raise HTTPException(status_code=404, detail="Rumi conversation not found")
-        return conversation
+        return _get_conversation(db, user, conversation_id)
     conversation = db.scalar(
         select(RumiConversation)
         .where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id)
         .order_by(RumiConversation.updated_at.desc())
     )
     if conversation is None:
-        conversation = RumiConversation(user_id=user.id, company_id=user.company_id, title="Rumi conversation")
+        conversation = RumiConversation(user_id=user.id, company_id=user.company_id, title="New conversation")
         db.add(conversation)
         db.flush()
     return conversation
+
+
+def _conversation_history_context(db: Session, user: User, current_id: UUID) -> str:
+    """Provide a compact, user-scoped index so Rumi can recall past conversations."""
+    conversations = db.scalars(
+        select(RumiConversation)
+        .where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id)
+        .order_by(RumiConversation.updated_at.desc())
+        .limit(30)
+    ).all()
+    lines = [
+        "RUMI CONVERSATION HISTORY (user-scoped memory; use only for questions about prior Rumi conversations):",
+    ]
+    if not conversations:
+        lines.append("- No previous conversations are available.")
+        return "\n".join(lines)
+
+    for conversation in conversations:
+        messages = db.scalars(
+            select(RumiMessageRecord)
+            .where(RumiMessageRecord.conversation_id == conversation.id, RumiMessageRecord.role == "user")
+            .order_by(RumiMessageRecord.created_at.asc())
+            .limit(8)
+        ).all()
+        if not messages:
+            continue
+        questions = " | ".join(message.content.replace("\n", " ")[:220] for message in messages)
+        marker = " current conversation" if conversation.id == current_id else ""
+        lines.append(
+            f"- Title: {conversation.title} | Created: {conversation.created_at.isoformat()} | "
+            f"Updated: {conversation.updated_at.isoformat()} |{marker} User questions: {questions}"
+        )
+    return "\n".join(lines)
 
 
 @router.get("/conversations/current", response_model=ConversationResponse)
@@ -195,9 +242,45 @@ def conversations(db: Session = Depends(get_db), user: User = Depends(get_curren
     return [ConversationResponse.model_validate(item) for item in items]
 
 
+@router.post("/conversations", response_model=ConversationResponse, status_code=201)
+def create_conversation(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ConversationResponse:
+    conversation = RumiConversation(user_id=user.id, company_id=user.company_id, title="New conversation")
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+    return ConversationResponse.model_validate(conversation)
+
+
+@router.patch("/conversations/{conversation_id}", response_model=ConversationResponse)
+def rename_conversation(
+    conversation_id: UUID,
+    payload: ConversationTitleUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ConversationResponse:
+    conversation = _get_conversation(db, user, conversation_id)
+    conversation.title = payload.title.strip()
+    if not conversation.title:
+        raise HTTPException(status_code=422, detail="Conversation title cannot be empty")
+    db.commit()
+    db.refresh(conversation)
+    return ConversationResponse.model_validate(conversation)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    conversation = _get_conversation(db, user, conversation_id)
+    db.delete(conversation)
+    db.commit()
+
+
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
 def conversation_messages(conversation_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[MessageResponse]:
-    conversation = _get_or_create_conversation(db, user, conversation_id)
+    conversation = _get_conversation(db, user, conversation_id)
     items = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
     return [MessageResponse.model_validate(item) for item in items]
 
@@ -214,6 +297,7 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
 
     history = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
     context = _workspace_context(db, user.company_id)
+    conversation_history = _conversation_history_context(db, user, conversation.id)
     system = {
         "role": "system",
         "content": (
@@ -227,6 +311,9 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
             "The current readiness facts are calculated from the current requirements and evidence, not from stale historical checks.\n\n"
             "EVIDENCE RULES: Use the evidence intelligence state when present. Explain actual attention reasons such as expired, expiring, unverified, rejected, requires review, invalid, or unmapped only when the supplied data supports them. "
             "Do not describe legacy/no-intelligence evidence as verified.\n\n"
+            "CONVERSATION MEMORY RULES: You may use RUMI CONVERSATION HISTORY only to answer questions about the user's previous Rumi conversations. "
+            "If asked what the user asked earlier, last week, on a particular date, or in a prior conversation, use the supplied history index and be explicit when the available index does not contain enough detail. "
+            "Do not use conversation history as evidence for current workspace business facts.\n\n"
             "PRODUCT GUIDANCE RULES: Rumi is also AGATA's in-product guide. When the user asks how to create, find, review, upload, assign, manage, or navigate within AGATA, explain the workflow clearly and give a navigation action when a relevant destination exists. "
             "Use only these internal destinations: Projects=/projects; Contractors=/contractors; Requirements=/requirements; Evidence=/evidence; Readiness=/readiness; Remediation=/remediation; Rumi=/rumi; Insights=/insights; Notifications=/notifications; Team=/team; Settings=/settings; Billing & Plan=/billing; Usage=/usage; Audit Trail=/audit; Command Center=/dashboard. "
             "For a navigation action, use Markdown link syntax exactly like [Open Projects](/projects). Only use one of the destinations listed above. "
@@ -234,6 +321,8 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
             "GREETING/IDENTITY RULES: If asked who you are, say you are Rumi, AGATA's compliance intelligence assistant. Keep it brief. "
             "If the answer is not supported by the supplied data, say so instead of guessing. Keep answers concise and practical.\n\n"
             + context
+            + "\n\n"
+            + conversation_history
         ),
     }
     messages = [system, *[{"role": item.role, "content": item.content} for item in history]]
@@ -249,7 +338,7 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
             if answer:
                 db.add(RumiMessageRecord(conversation_id=conversation.id, role="assistant", content=answer))
                 conversation.updated_at = datetime.now(timezone.utc)
-                if conversation.title == "Rumi conversation" and last_user:
+                if conversation.title in {"Rumi conversation", "New conversation"} and last_user:
                     conversation.title = last_user["content"][:160]
                 db.commit()
 
