@@ -96,14 +96,7 @@ def build_readiness_intelligence(db: Session, company_id: UUID, project_id: UUID
             requirement_rows.append({"requirement_id": str(requirement.id), "requirement_name": requirement.name, "status": "satisfied", "reason": "A valid evidence record satisfies this requirement.", "evidence": [{"document_id": str(document.id), "document_name": document.name, "state": evidence_state[document.id]} for document in valid]})
             continue
         candidate_rows = [{"document_id": str(document.id), "document_name": document.name, "state": evidence_state[document.id], "reason": _reason(evidence_state[document.id])} for document in candidates]
-        row = {
-            "requirement_id": str(requirement.id),
-            "requirement_name": requirement.name,
-            "status": "blocked",
-            "reason": candidate_rows[0]["reason"] if len(candidate_rows) == 1 else ("Available evidence does not currently satisfy this requirement." if candidates else "No matching evidence is currently attached to this requirement."),
-            "action": "Repair or replace the listed evidence." if candidates else "Provide evidence for this requirement.",
-            "evidence": candidate_rows,
-        }
+        row = {"requirement_id": str(requirement.id), "requirement_name": requirement.name, "status": "blocked", "reason": candidate_rows[0]["reason"] if len(candidate_rows) == 1 else ("Available evidence does not currently satisfy this requirement." if candidates else "No matching evidence is currently attached to this requirement."), "action": "Repair or replace the listed evidence." if candidates else "Provide evidence for this requirement.", "evidence": candidate_rows}
         requirement_rows.append(row)
         blockers.append(row)
 
@@ -150,13 +143,15 @@ def simulate_readiness(db: Session, company_id: UUID, project_id: UUID, contract
     current = build_readiness_intelligence(db, company_id, project_id, contractor_id)
     repair_ids = {str(item) for item in repair_evidence_ids}
     provided_ids = {str(item) for item in provide_requirement_ids}
-    resolved: set[str] = set(provided_ids)
+    resolved_requirement_ids: set[str] = set(provided_ids)
     for evidence in current["evidence"]:
         if evidence["document_id"] in repair_ids:
-            resolved.update(evidence["blocked_requirements_it_could_resolve_if_repaired"])
-    remaining = [blocker for blocker in current["blockers"] if blocker["requirement_id"] not in resolved]
+            for blocker in current["blockers"]:
+                if blocker["requirement_name"] in evidence["blocked_requirements_it_could_resolve_if_repaired"]:
+                    resolved_requirement_ids.add(blocker["requirement_id"])
+    remaining = [blocker for blocker in current["blockers"] if blocker["requirement_id"] not in resolved_requirement_ids]
     total = len(current["requirements"])
     satisfied = total - len(remaining)
     score = round((satisfied / total) * 100) if total else 0
     status = "not_configured" if total == 0 else "ready" if score == 100 else "attention" if score >= 60 else "not_ready"
-    return {"project_id": current["project_id"], "contractor_id": current["contractor_id"], "current_score": current["score"], "projected_score": score, "score_delta": score - current["score"], "current_status": current["status"], "projected_status": status, "resolved_requirements": [blocker["requirement_name"] for blocker in current["blockers"] if blocker["requirement_id"] in resolved], "remaining_blockers": [blocker["requirement_name"] for blocker in remaining], "selected_repair_evidence_ids": sorted(repair_ids), "selected_new_requirement_ids": sorted(provided_ids)}
+    return {"project_id": current["project_id"], "contractor_id": current["contractor_id"], "current_score": current["score"], "projected_score": score, "score_delta": score - current["score"], "current_status": current["status"], "projected_status": status, "resolved_requirements": [blocker["requirement_name"] for blocker in current["blockers"] if blocker["requirement_id"] in resolved_requirement_ids], "remaining_blockers": [blocker["requirement_name"] for blocker in remaining], "selected_repair_evidence_ids": sorted(repair_ids), "selected_new_requirement_ids": sorted(provided_ids)}
