@@ -15,6 +15,7 @@ from app.api.notifications import router as notifications_router
 from app.api.project_readiness import router as project_readiness_router
 from app.api.project_workflow import router as project_workflow_router
 from app.api.readiness_decisions import router as readiness_decisions_router
+from app.api.readiness_impact import router as readiness_impact_router
 from app.api.readiness_intelligence import router as readiness_intelligence_router
 from app.api.readiness_management import router as readiness_management_router
 from app.api.remediation import router as remediation_router
@@ -63,6 +64,7 @@ app.include_router(contractor_management_router)
 app.include_router(evidence_intelligence_router)
 app.include_router(readiness_management_router)
 app.include_router(readiness_intelligence_router)
+app.include_router(readiness_impact_router)
 app.include_router(readiness_decisions_router)
 app.include_router(remediation_router)
 app.include_router(notifications_router)
