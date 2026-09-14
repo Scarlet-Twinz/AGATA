@@ -28,6 +28,21 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://agata:agata@127.0.0.1:5432/agata
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agata
+          POSTGRES_PASSWORD: agata
+          POSTGRES_DB: agata
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agata -d agata"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
