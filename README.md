@@ -4,7 +4,7 @@
 
 AGATA is a proprietary product in active development, being built as a deployable compliance/readiness platform rather than a generic dashboard or document repository. Its core question is simple:
 
-> **Can this contractor satisfy the requirements for this project right now, and what needs attention?**
+> **Can this contractor satisfy the requirements for this project right now, what is blocking the decision, and what is the smallest evidence change that could change it?**
 
 AGATA connects requirements, evidence, project context, expiry dates, readiness decisions, remediation, alerts, audit history, and an AI intelligence layer called **RUMI** in one operational workspace.
 
@@ -22,7 +22,14 @@ Requirements + Evidence + Project Context
           │         │         │
           └─────────┼─────────┘
                     ▼
-            Recommended Action
+             Decision Lens
+             /          \
+            ▼            ▼
+       Evidence       What-if
+        lineage      simulation
+            \            /
+             ▼          ▼
+              Path to Ready
                     │
                     ▼
                    RUMI
@@ -34,7 +41,7 @@ The important design choice is that **readiness is computed by application logic
 
 AGATA is intentionally narrower than a CRM, ERP, project-management suite, generic file store, or generic chatbot.
 
-The product is organized around a relationship between:
+The product is organized around a connected evidence-to-decision loop:
 
 - a company/workspace;
 - contractors;
@@ -42,10 +49,21 @@ The product is organized around a relationship between:
 - project requirements;
 - evidence supplied by contractors;
 - evidence verification/review state;
-- current readiness decisions; and
-- actions required to move an entity toward readiness.
+- current readiness decisions;
+- actions required to move an entity toward readiness; and
+- a retained explanation of **why the readiness state existed at a point in time**.
 
-That gives the platform an operational workflow instead of simply storing documents.
+### The AGATA Decision Lens
+
+AGATA does not stop at a readiness percentage. For a project + contractor pair it can expose:
+
+1. **Requirement-level reasoning** — which requirements are satisfied or blocked and why.
+2. **Evidence lineage** — which evidence records support a requirement and which evidence problems can affect it.
+3. **Minimum Change Set** — a deterministic, prioritized set of evidence repairs or new evidence needed to address the current blockers.
+4. **Counterfactual simulation** — select proposed evidence repairs and see the projected readiness score/status without changing production data.
+5. **Decision Memory** — readiness states are fingerprinted and retained as structured snapshots so a later reviewer can see how the evidence-backed state changed.
+
+This combination is deliberately different from treating compliance as a document inbox, a one-time checklist, or an opaque AI score. AGATA keeps the deterministic decision engine authoritative and uses RUMI as the explanation/navigation layer.
 
 ## Current Product Scope
 
@@ -60,6 +78,11 @@ That gives the platform an operational workflow instead of simply storing docume
 - Evidence intelligence and review state
 - Expiry-aware readiness calculation
 - Explainable readiness scores and statuses
+- Requirement-level readiness reasoning
+- Evidence-to-requirement impact analysis
+- Minimum Change Set / Path to Ready
+- Counterfactual readiness simulation
+- Fingerprinted readiness decision snapshots
 - Readiness decisions
 - Remediation and action workflows
 - Notifications and activity/audit history
@@ -81,7 +104,31 @@ The resulting state is explicit:
 - `NOT_READY` — the current evidence does not satisfy enough of the required set.
 - `NOT_CONFIGURED` — the project has no configured requirements.
 
-The API also exposes project-level summaries with contractor counts, readiness distribution, average score, decision counts, and the most common missing requirements.
+The Decision Lens expands that result into requirement-level reasons, affected evidence, blockers, and a deterministic minimum change set. Its what-if endpoint projects the result of selected evidence repairs or newly supplied requirement evidence without mutating the workspace.
+
+## Decision Memory
+
+Every Decision Lens state has a canonical fingerprint derived from its structured requirement, evidence, blocker, and change-set state. The platform stores that state in `readiness_traces` with the engine version and the exact structured snapshot used to explain the result.
+
+This gives AGATA a useful distinction between an ordinary audit log and **decision memory**:
+
+```text
+Evidence state
+     │
+     ▼
+Readiness calculation
+     │
+     ▼
+Requirement / evidence reasoning
+     │
+     ▼
+Decision fingerprint
+     │
+     ▼
+Retained readiness trace
+```
+
+A later state can be compared against the previous fingerprint to show score movement and whether the readiness status changed. The trace does not claim that a decision was correct; it preserves the evidence-backed state that AGATA could see.
 
 ## RUMI Intelligence Layer
 
@@ -97,6 +144,8 @@ This separation is deliberate:
 Application data / rules
         │
         ├── deterministic answers
+        │
+        ├── readiness decision lens
         │
         └── current workspace context
                     │
@@ -120,20 +169,19 @@ RUMI also has product-navigation guidance for supported AGATA destinations, but 
                               ▼
                        FastAPI Application
                               │
-             ┌────────────────┼─────────────────┐
-             ▼                ▼                 ▼
-        PostgreSQL       Domain Services    RUMI Adapter
-             │                │                 │
-             │                │              Ollama
-             │                │
-             └────── Evidence / Readiness ─────┘
-                              │
-                              ▼
-                       Storage Boundary
-                    local/dev → object storage
-
-                     Billing Boundary
-                 provider-independent adapter
+          ┌───────────────────┼──────────────────┐
+          ▼                   ▼                  ▼
+     PostgreSQL          Domain Services     RUMI Adapter
+          │                   │                  │
+          │          ┌────────┴────────┐       Ollama
+          │          ▼                 ▼
+          │     Readiness Engine   Decision Lens
+          │          │                 │
+          │          └──────┬──────────┘
+          │                 ▼
+          │        Fingerprinted Traces
+          │
+          └──── Evidence / Decisions / Audit ────
 ```
 
 ## Backend Boundaries
@@ -141,6 +189,8 @@ RUMI also has product-navigation guidance for supported AGATA destinations, but 
 The backend is intentionally split into API, core, database, models, schemas, and services. Business rules such as readiness calculation belong in services rather than being duplicated across HTTP routes.
 
 Protected operations resolve the authenticated company/workspace before accessing company-owned records. Client-supplied IDs are not treated as sufficient authorization.
+
+Database changes are now tracked as forward-only numbered SQL migrations under `backend/migrations/` and applied by the application migration runner. Development no longer relies on `Base.metadata.create_all()` or a development-only schema patch as the database lifecycle mechanism.
 
 ## Security Principles
 
@@ -151,6 +201,8 @@ Protected operations resolve the authenticated company/workspace before accessin
 - Audit events are first-class records.
 - Evidence metadata is separated from the broader compliance domain.
 - AI receives only the company-scoped context required for the requested operation.
+- Readiness traces preserve the structured state behind a readiness result.
+- Database schema changes are versioned and tracked.
 - Normal development does not depend on a destructive database reset.
 
 ## Billing Direction
@@ -178,11 +230,12 @@ AGATA/
 │   ├── app/
 │   │   ├── api/          # HTTP routes and product boundaries
 │   │   ├── core/         # configuration/security primitives
-│   │   ├── db/           # database/session setup
+│   │   ├── db/           # database/session + migration runner
 │   │   ├── models/       # persistent domain models
 │   │   ├── schemas/      # validation contracts
 │   │   ├── services/     # readiness, RUMI, domain logic
 │   │   └── main.py
+│   ├── migrations/       # versioned SQL schema changes
 │   ├── tests/
 │   └── requirements.txt
 ├── frontend/
@@ -217,6 +270,8 @@ copy .env.example .env
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+On startup, AGATA runs the tracked database migrations and records applied versions in `schema_migrations`. Existing development databases are adopted through a safe baseline path; fresh databases run the complete migration chain.
+
 The API exposes `/health`, `/database`, and FastAPI's `/docs` for local verification.
 
 ### Frontend
@@ -244,9 +299,9 @@ The model name is configuration, not a hard-coded application dependency. RUMI s
 
 ## Product Roadmap
 
-The near-term priority is the core readiness workflow: make requirements, evidence, project context, readiness decisions, remediation, and RUMI useful enough to support a real operational workflow.
+The near-term priority is the core readiness workflow: make requirements, evidence, project context, readiness decisions, remediation, Decision Lens, and RUMI useful enough to support a real operational workflow.
 
-Planned product work includes production-grade file/object storage, versioned database migrations as the schema stabilizes, production billing integration, deployment infrastructure, stronger production authentication/session controls, and continued readiness/evidence intelligence improvements.
+Future product work includes production-grade file/object storage, production billing integration, deployment infrastructure, stronger production authentication/session controls, external evidence integrations, and continued readiness/evidence intelligence improvements.
 
 ## Status
 
