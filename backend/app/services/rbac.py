@@ -12,12 +12,12 @@ from app.models.workspace import WorkspaceMembership, WorkspacePermission, Works
 PERMISSIONS: dict[str, str] = {
     "workspace.view": "View workspace administration", "workspace.update": "Update workspace details", "team.view": "View workspace members", "team.invite": "Invite people to the workspace", "team.manage": "Manage member roles and access",
     "projects.view": "View projects", "projects.create": "Create projects", "projects.update": "Update projects", "projects.delete": "Delete projects", "contractors.view": "View contractors", "contractors.create": "Create contractors", "contractors.update": "Update contractors",
-    "requirements.view": "View requirements", "requirements.manage": "Manage requirements", "evidence.view": "View evidence", "evidence.upload": "Upload evidence", "evidence.review": "Review evidence", "readiness.view": "View readiness", "readiness.evaluate": "Run readiness evaluations", "readiness.approve": "Approve readiness decisions", "audit.view": "View audit history", "settings.view": "View settings", "settings.manage": "Manage settings", "billing.view": "View billing and plan information",
+    "requirements.view": "View requirements", "requirements.manage": "Manage requirements", "evidence.view": "View evidence", "evidence.upload": "Upload evidence", "evidence.review": "Review evidence", "readiness.view": "View readiness", "readiness.evaluate": "Run readiness evaluations", "readiness.approve": "Approve readiness decisions", "audit.view": "View audit history", "settings.view": "View settings", "settings.manage": "Manage settings", "billing.view": "View billing and plan information", "billing.manage": "Manage billing and subscriptions",
 }
 
 ROLE_DEFINITIONS: dict[str, tuple[str, str, set[str]]] = {
     "owner": ("Owner", "Full workspace control", set(PERMISSIONS)),
-    "admin": ("Admin", "Workspace administration and operational control", set(PERMISSIONS) - {"billing.view"}),
+    "admin": ("Admin", "Workspace administration and operational control", set(PERMISSIONS) - {"billing.manage"}),
     "compliance_manager": ("Compliance Manager", "Manage compliance evidence and readiness operations", {"workspace.view", "team.view", "projects.view", "projects.update", "contractors.view", "contractors.update", "requirements.view", "requirements.manage", "evidence.view", "evidence.upload", "evidence.review", "readiness.view", "readiness.evaluate", "readiness.approve", "audit.view", "settings.view"}),
     "project_manager": ("Project Manager", "Manage project and contractor readiness operations", {"workspace.view", "team.view", "projects.view", "projects.create", "projects.update", "contractors.view", "contractors.create", "contractors.update", "requirements.view", "evidence.view", "evidence.upload", "readiness.view", "readiness.evaluate", "audit.view"}),
     "reviewer": ("Reviewer", "Review evidence and readiness decisions", {"workspace.view", "team.view", "projects.view", "contractors.view", "requirements.view", "evidence.view", "evidence.review", "readiness.view", "readiness.evaluate", "audit.view"}),
@@ -74,6 +74,7 @@ def require_permission(permission_key: str) -> Callable:
 def _request_permission(request: Request) -> str | None:
     path, method = request.url.path, request.method.upper()
     if path in {"/api/workspace/invitations/preview", "/api/workspace/invitations/accept", "/api/workspace/invitations/accept-authenticated"} or path.startswith("/api/billing/webhooks/"): return None
+    if path == "/api/billing/checkout": return "billing.manage"
     if path.startswith("/api/billing"): return "billing.view"
     if path.startswith("/api/audit"): return "audit.view"
     if path.startswith("/api/workspace/team"): return "team.manage" if method != "GET" else "team.view"
