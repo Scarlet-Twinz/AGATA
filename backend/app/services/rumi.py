@@ -39,7 +39,7 @@ def _is_historical_trace(messages: list[dict[str, str]]) -> bool:
     return (
         "rumi_mode: historical_trace" in content
         or "readiness decision trace" in content
-        or ("historical trace" in content and "readiness decision" in content)
+        or "historical trace" in content
     )
 
 
