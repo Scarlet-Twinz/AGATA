@@ -67,18 +67,17 @@ def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[st
 
 def _trace_value(text: str, label: str, stop_labels: tuple[str, ...]) -> str | None:
     escaped = re.escape(label)
-    stops = "|".join(re.escape(item) for item in stop_labels)
-    match = re.search(rf"{escaped}:\s*(.*?)(?=\.\s*(?:{stops}):|$)", text, flags=re.IGNORECASE)
+    if stop_labels:
+        stops = "|".join(re.escape(item) for item in stop_labels)
+        pattern = rf"{escaped}:\s*(.*?)(?=\.\s*(?:{stops}):|$)"
+    else:
+        pattern = rf"{escaped}:\s*(.*?)$"
+    match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else None
 
 
 def _historical_trace_explanation(text: str) -> str:
-    """Produce a deterministic, trace-only explanation when historical mode is requested.
-
-    Historical decision traces are audit records. A language model must not reinterpret
-    missing fields or numeric counts as business facts, so this path intentionally uses
-    only values explicitly present in the supplied trace.
-    """
+    """Produce a deterministic, trace-only explanation for historical decision records."""
     captured = _trace_value(text, "Captured at", ("Engine", "Status")) or "not established by the trace"
     engine = _trace_value(text, "Engine", ("Status", "Score")) or "not established by the trace"
     status = _trace_value(text, "Status", ("Score", "Deterministic explanation")) or "not established by the trace"
@@ -90,15 +89,16 @@ def _historical_trace_explanation(text: str) -> str:
     changes = _trace_value(text, "Change actions captured", ("Decision fingerprint",)) or "not established by the trace"
     fingerprint = _trace_value(text, "Decision fingerprint", ()) or "not established by the trace"
 
+    blocker_count = blockers.split("(", 1)[0].strip() if "(" in blockers else blockers
+    blocker_names = blockers.split("(", 1)[1].rsplit(")", 1)[0].strip() if "(" in blockers and ")" in blockers else "not listed"
+
     return (
-        "The historical AGATA readiness decision was recorded as "
-        f"{status} with a score of {score}. The trace was captured at {captured} using engine {engine}. "
+        f"The historical AGATA readiness decision was recorded as {status} with a score of {score}. "
+        f"The trace was captured at {captured} using engine {engine}. "
         f"The deterministic explanation states: {deterministic} "
-        f"The trace records {requirements} requirements, {evidence} evidence records, "
-        f"{blockers} change blockers ({blockers.split('(', 1)[1].rsplit(')', 1)[0] if '(' in blockers and ')' in blockers else blockers}), "
-        f"and {changes} change actions. "
-        "The trace does not establish additional details about the requirements, evidence, their validity, "
-        "verification state, causes, or remediation attempts. "
+        f"The trace records {requirements} requirements, {evidence} evidence records, and {blocker_count} blockers: {blocker_names}. "
+        f"It also records {changes} change actions. "
+        "The trace does not establish additional details about the requirements, evidence, their validity, verification state, causes, or remediation attempts. "
         f"The decision fingerprint for this recorded state is {fingerprint}."
     )
 
