@@ -64,7 +64,7 @@ def test_explicit_historical_mode_is_deterministic_and_never_calls_ollama(monkey
         "Captured at: 9/14/2026, 7:57:43 AM. Engine: readiness-v2. Status: Not Ready. "
         "Score: 0%. Deterministic explanation: 2 of 2 requirements are blocking readiness. "
         "Requirements captured: 2. Evidence records captured: 0. Blockers captured: 2 (NNNNNNNNNNNN, BB). "
-        "Change actions captured: 0. Decision fingerprint: f079df44d54c62c492bfe5ea011e28e2f40211662d685160118a31e0c51234ee."
+        "Change actions captured: 0. Decision fingerprint: f079df44d54c62c492bfe5ea011e28e2f40211662d685160118a31a0e..."
     )
 
     answer = "".join(asyncio.run(collect(rumi.stream_rumi([{"role": "user", "content": trace}]))))
@@ -75,9 +75,29 @@ def test_explicit_historical_mode_is_deterministic_and_never_calls_ollama(monkey
     assert "2 of 2 requirements are blocking readiness" in answer
     assert "NNNNNNNNNNNN, BB" in answer
     assert "zero evidence" in answer.lower()
+    assert "zero change actions" in answer.lower()
     assert "suggests" not in answer.lower()
     assert "gather" not in answer.lower()
     assert "initiate" not in answer.lower()
+
+
+def test_partial_historical_trace_does_not_invent_missing_fields():
+    trace = (
+        "RUMI_MODE: HISTORICAL_TRACE Explain this AGATA readiness decision trace. "
+        "Captured at: 9/14/2026, 7:57:43 AM. Engine: readiness-v2. Status: Not Ready. "
+        "Score: 0%. Deterministic explanation: 2 of 2 requirements are blocking readiness. "
+        "Requirements captured: 2. Evidence records captured"
+    )
+
+    answer = rumi._extract_historical_answer(trace)
+
+    assert "Not Ready" in answer
+    assert "0%" in answer
+    assert "2 of 2 requirements are blocking readiness" in answer
+    assert "blockers" not in answer.lower() or "recorded blocker count" in answer.lower()
+    assert "fingerprint" not in answer.lower()
+    assert "invalid" not in answer.lower()
+    assert "missing evidence" not in answer.lower()
 
 
 def test_non_historical_timeout_raises_without_retry(monkeypatch):
