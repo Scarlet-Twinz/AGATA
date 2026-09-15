@@ -24,6 +24,10 @@ class CheckoutRequest(BaseModel):
     provider: BillingProvider | None = None
 
 
+def _provider_plan_id(plan: BillingPlan, provider: BillingProvider) -> str | None:
+    return {BillingProvider.STRIPE: plan.stripe_price_id, BillingProvider.PAYSTACK: plan.paystack_plan_code, BillingProvider.FLUTTERWAVE: plan.flutterwave_plan_id}[provider]
+
+
 def _plan_payload(plan: BillingPlan) -> dict:
     return {"code": plan.code, "name": plan.name, "description": plan.description, "currency": plan.currency, "amount_minor": plan.amount_minor, "interval": plan.interval, "active": plan.active}
 
@@ -34,7 +38,8 @@ def _subscription_payload(item: BillingSubscription, plan: BillingPlan) -> dict:
 
 @router.get("/plans")
 def list_plans(db: Session = Depends(get_db), _: User = Depends(require_permission("billing.view"))):
-    return [_plan_payload(plan) for plan in db.scalars(select(BillingPlan).where(BillingPlan.active.is_(True)).order_by(BillingPlan.amount_minor.asc())).all()]
+    plans = db.scalars(select(BillingPlan).where(BillingPlan.active.is_(True)).order_by(BillingPlan.amount_minor.asc(), BillingPlan.interval.asc())).all()
+    return [{**_plan_payload(plan), "provider_readiness": {provider.value: bool(_provider_plan_id(plan, provider)) for provider in BillingProvider}} for plan in plans]
 
 
 @router.get("")
@@ -49,10 +54,12 @@ def billing_summary(db: Session = Depends(get_db), user: User = Depends(require_
 
 
 @router.post("/checkout")
-async def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db), user: User = Depends(require_permission("billing.view"))):
+async def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db), user: User = Depends(require_permission("billing.manage"))):
     plan = db.scalar(select(BillingPlan).where(BillingPlan.code == payload.plan_code, BillingPlan.active.is_(True)))
     if not plan: raise HTTPException(status_code=404, detail="Billing plan not found")
     provider = payload.provider or BillingProvider(get_settings().billing_default_provider)
+    if plan.amount_minor > 0 and not _provider_plan_id(plan, provider):
+        raise HTTPException(status_code=409, detail=f"{provider.value.title()} recurring plan is not configured for {plan.code}")
     try:
         result = await get_adapter(provider).create_checkout(email=user.email, plan=plan, company_id=str(user.company_id))
     except BillingProviderError as exc:
@@ -118,7 +125,10 @@ async def receive_webhook(provider: BillingProvider, request: Request, db: Sessi
             if event_type in {"charge.success", "payment.completed", "invoice.paid"} and subscription:
                 amount = int(data.get("amount") or data.get("amount_total") or (plan.amount_minor if plan else 0))
                 currency = str(data.get("currency") or (plan.currency if plan else "USD")).upper()
-                db.add(BillingPayment(company_id=company_id, subscription_id=subscription.id, provider=provider, provider_payment_id=str(data.get("reference") or data.get("id") or event_id), amount_minor=amount, currency=currency, status="paid", paid_at=datetime.now(timezone.utc)))
+                payment_id = str(data.get("reference") or data.get("id") or event_id)
+                existing_payment = db.scalar(select(BillingPayment).where(BillingPayment.provider == provider, BillingPayment.provider_payment_id == payment_id))
+                if existing_payment is None:
+                    db.add(BillingPayment(company_id=company_id, subscription_id=subscription.id, provider=provider, provider_payment_id=payment_id, amount_minor=amount, currency=currency, status="paid", paid_at=datetime.now(timezone.utc)))
         elif subscription:
             subscription.status = SubscriptionStatus.CANCELED if event_type in canceled_events else SubscriptionStatus.PAST_DUE
             if event_type == "subscription.not_renew": subscription.cancel_at_period_end = True
