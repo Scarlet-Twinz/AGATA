@@ -19,7 +19,7 @@ def settings():
     )
 
 
-def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
+def test_historical_trace_never_calls_ollama(monkeypatch):
     calls = 0
 
     async def fake_stream(messages, url, model, timeout_seconds):
@@ -78,29 +78,6 @@ def test_explicit_historical_mode_is_deterministic_and_never_calls_ollama(monkey
     assert "suggests" not in answer.lower()
     assert "gather" not in answer.lower()
     assert "initiate" not in answer.lower()
-
-
-def test_historical_timeout_raises_without_retrying_with_live_context(monkeypatch):
-    calls: list[list[dict[str, str]]] = []
-
-    async def fake_stream(messages, url, model, timeout_seconds):
-        calls.append(messages)
-        raise httpx.ReadTimeout("local model timed out")
-        yield "unreachable"
-
-    monkeypatch.setattr(rumi, "_stream", fake_stream)
-    monkeypatch.setattr(rumi, "get_settings", settings)
-
-    messages = [
-        {"role": "system", "content": "Current workspace context"},
-        {"role": "user", "content": "Explain this historical trace. Status: Not Ready."},
-    ]
-
-    with pytest.raises(rumi.RumiUnavailableError, match="ReadTimeout"):
-        asyncio.run(collect(rumi.stream_rumi(messages)))
-
-    assert len(calls) == 1
-    assert calls[0][1] == messages[1]
 
 
 def test_non_historical_timeout_raises_without_retry(monkeypatch):
