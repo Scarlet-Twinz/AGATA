@@ -70,8 +70,6 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
         async for token in _stream(request_messages, url, settings.ollama_model, timeout_seconds):
             yield token
     except httpx.ReadTimeout:
-        # Historical traces are already compact and authoritative. A timeout here is a model/runtime
-        # problem, not a reason to retry with the large live workspace context.
         yield "Rumi is temporarily unavailable: ReadTimeout."
     except httpx.HTTPError as exc:
         yield f"Rumi is temporarily unavailable: {exc.__class__.__name__}."
