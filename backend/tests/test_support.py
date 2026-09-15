@@ -27,7 +27,7 @@ async def test_support_request_sends_sanitized_html(monkeypatch) -> None:
     assert captured["category"] == "support"
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in captured["html"]
     assert "<script>" not in captured["html"]
-    assert "User@Example.com" in captured["text"]
+    assert "user@example.com" in captured["text"]
 
 
 @pytest.mark.anyio
