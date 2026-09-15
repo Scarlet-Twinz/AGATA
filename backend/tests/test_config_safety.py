@@ -52,3 +52,17 @@ def test_production_accepts_explicit_external_services() -> None:
     )
 
     assert settings.cors_origin_list == ["https://app.example.com", "https://www.example.com"]
+
+
+def test_support_email_accepts_legacy_agata_env_name() -> None:
+    settings = Settings(_env_file=None, AGATA_SUPPORT_EMAIL="legacy@example.com")
+    assert settings.support_email == "legacy@example.com"
+
+
+def test_support_email_prefers_current_env_name() -> None:
+    settings = Settings(
+        _env_file=None,
+        SUPPORT_EMAIL="support@example.com",
+        AGATA_SUPPORT_EMAIL="legacy@example.com",
+    )
+    assert settings.support_email == "support@example.com"
