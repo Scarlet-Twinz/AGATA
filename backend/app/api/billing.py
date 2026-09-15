@@ -9,10 +9,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models.billing import BillingPayment, BillingPlan, BillingProvider, BillingSubscription, BillingWebhookEvent, SubscriptionStatus
+from app.models.billing import BillingCustomer, BillingPayment, BillingPlan, BillingProvider, BillingSubscription, BillingWebhookEvent, SubscriptionStatus
 from app.models.entities import User
 from app.services.billing import BillingProviderError, get_adapter, webhook_event_id
 from app.services.rbac import require_permission
@@ -71,43 +70,58 @@ async def receive_webhook(provider: BillingProvider, request: Request, db: Sessi
         payload = json.loads(body.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook JSON") from exc
+
     event_id = webhook_event_id(provider, payload)
     event_type = str(payload.get("type") or payload.get("event") or "unknown")
-    existing = db.scalar(select(BillingWebhookEvent).where(BillingWebhookEvent.provider == provider, BillingWebhookEvent.event_id == event_id))
-    if existing:
+    if db.scalar(select(BillingWebhookEvent).where(BillingWebhookEvent.provider == provider, BillingWebhookEvent.event_id == event_id)):
         return {"received": True, "duplicate": True}
-    event = BillingWebhookEvent(provider=provider, event_id=event_id, event_type=event_type, payload=body.decode("utf-8"))
-    db.add(event)
+    event = BillingWebhookEvent(provider=provider, event_id=event_id, event_type=event_type, payload=body.decode("utf-8")); db.add(event)
+
     data = payload.get("data") or {}
     metadata = data.get("metadata") or data.get("meta") or {}
-    company_id_raw = metadata.get("company_id")
-    if company_id_raw:
-        try: company_id = UUID(str(company_id_raw))
-        except ValueError: company_id = None
-    else: company_id = None
+    company_id = None
+    if metadata.get("company_id"):
+        try: company_id = UUID(str(metadata["company_id"]))
+        except ValueError: pass
+    provider_customer_id = data.get("customer")
+    if isinstance(provider_customer_id, dict): provider_customer_id = provider_customer_id.get("customer_code") or provider_customer_id.get("id")
+    if company_id is None and provider_customer_id:
+        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.provider == provider, BillingCustomer.provider_customer_id == str(provider_customer_id)))
+        if customer: company_id = customer.company_id
 
     plan_code = metadata.get("plan_code")
     plan = db.scalar(select(BillingPlan).where(BillingPlan.code == plan_code)) if plan_code else None
-    provider_subscription_id = data.get("subscription") or data.get("subscription_code") or data.get("id")
-    provider_customer_id = data.get("customer")
-    if isinstance(provider_customer_id, dict): provider_customer_id = provider_customer_id.get("customer_code") or provider_customer_id.get("id")
+    provider_subscription_id = data.get("subscription") or data.get("subscription_code")
+    if provider == BillingProvider.STRIPE and data.get("object") == "subscription": provider_subscription_id = data.get("id")
+    if provider_customer_id and company_id:
+        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.company_id == company_id, BillingCustomer.provider == provider))
+        if customer is None: db.add(BillingCustomer(company_id=company_id, provider=provider, provider_customer_id=str(provider_customer_id), email=str(data.get("email") or "")))
+        elif customer.provider_customer_id != str(provider_customer_id): customer.provider_customer_id = str(provider_customer_id)
 
-    if company_id and plan and event_type in {"checkout.session.completed", "customer.subscription.created", "subscription.create", "charge.success", "payment.completed"}:
-        subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider, BillingSubscription.provider_subscription_id == str(provider_subscription_id))) if provider_subscription_id else None
+    active_events = {"checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "invoice.paid", "subscription.create", "charge.success", "payment.completed"}
+    failed_events = {"invoice.payment_failed", "subscription.not_renew"}
+    canceled_events = {"customer.subscription.deleted", "subscription.disable"}
+
+    if company_id and (event_type in active_events or event_type in failed_events or event_type in canceled_events):
+        subscription = None
+        if provider_subscription_id:
+            subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider, BillingSubscription.provider_subscription_id == str(provider_subscription_id)))
         if subscription is None:
-            subscription = BillingSubscription(company_id=company_id, plan_id=plan.id, provider=provider, provider_subscription_id=str(provider_subscription_id) if provider_subscription_id else None, provider_customer_id=str(provider_customer_id) if provider_customer_id else None, status=SubscriptionStatus.ACTIVE)
-            db.add(subscription)
-        else:
-            subscription.status = SubscriptionStatus.ACTIVE
-        amount = int(data.get("amount") or data.get("amount_total") or plan.amount_minor)
-        currency = str(data.get("currency") or plan.currency).upper()
-        db.add(BillingPayment(company_id=company_id, subscription_id=subscription.id, provider=provider, provider_payment_id=str(data.get("reference") or data.get("id") or event_id), amount_minor=amount, currency=currency, status="paid", paid_at=datetime.now(timezone.utc)))
+            subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider).order_by(BillingSubscription.created_at.desc()))
 
-    if company_id and event_type in {"customer.subscription.deleted", "subscription.disable", "subscription.not_renew", "invoice.payment_failed", "invoice.payment_failed"}:
-        query = select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider)
-        if provider_subscription_id: query = query.where(BillingSubscription.provider_subscription_id == str(provider_subscription_id))
-        subscription = db.scalar(query.order_by(BillingSubscription.created_at.desc()))
-        if subscription: subscription.status = SubscriptionStatus.CANCELED if event_type in {"customer.subscription.deleted", "subscription.disable"} else SubscriptionStatus.PAST_DUE
+        if event_type in active_events:
+            if subscription is None and plan:
+                subscription = BillingSubscription(company_id=company_id, plan_id=plan.id, provider=provider, provider_subscription_id=str(provider_subscription_id) if provider_subscription_id else None, provider_customer_id=str(provider_customer_id) if provider_customer_id else None, status=SubscriptionStatus.ACTIVE); db.add(subscription)
+            elif subscription:
+                subscription.status = SubscriptionStatus.ACTIVE
+                if provider_customer_id: subscription.provider_customer_id = str(provider_customer_id)
+            if event_type in {"charge.success", "payment.completed", "invoice.paid"} and subscription:
+                amount = int(data.get("amount") or data.get("amount_total") or (plan.amount_minor if plan else 0))
+                currency = str(data.get("currency") or (plan.currency if plan else "USD")).upper()
+                db.add(BillingPayment(company_id=company_id, subscription_id=subscription.id, provider=provider, provider_payment_id=str(data.get("reference") or data.get("id") or event_id), amount_minor=amount, currency=currency, status="paid", paid_at=datetime.now(timezone.utc)))
+        elif subscription:
+            subscription.status = SubscriptionStatus.CANCELED if event_type in canceled_events else SubscriptionStatus.PAST_DUE
+            if event_type == "subscription.not_renew": subscription.cancel_at_period_end = True
 
     event.processed_at = datetime.now(timezone.utc)
     db.commit()
