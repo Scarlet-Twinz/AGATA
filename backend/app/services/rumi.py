@@ -102,20 +102,25 @@ def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[st
 
 def _extract_historical_answer(content: str) -> str:
     """Build a safe natural-language explanation from an immutable trace envelope."""
-    def field(pattern: str, default: str | None = None) -> str | None:
-        match = re.search(pattern, content, flags=re.IGNORECASE)
-        return match.group(1).strip() if match else default
+    def field(label: str, next_label: str | None = None, default: str | None = None) -> str | None:
+        if next_label:
+            pattern = rf"{re.escape(label)}\s*(.*?)(?=\.\s*{re.escape(next_label)}|$)"
+        else:
+            pattern = rf"{re.escape(label)}\s*(.*?)(?=\.\s*(?:Explain why|$)|$)"
+        match = re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL)
+        value = match.group(1).strip() if match else default
+        return value.rstrip(".") if value else value
 
-    captured_at = field(r"Captured at:\s*(.*?)(?=\.\s*Engine:)")
-    engine = field(r"Engine:\s*(.*?)(?=\.\s*Status:)")
-    status = field(r"Status:\s*(.*?)(?=\.\s*Score:)")
-    score = field(r"Score:\s*(.*?)(?=\.\s*Deterministic explanation:)")
-    explanation = field(r"Deterministic explanation:\s*(.*?)(?=\.\s*Requirements captured:)")
-    requirements = field(r"Requirements captured:\s*(.*?)(?=\.\s*Evidence records captured:)")
-    evidence = field(r"Evidence records captured:\s*(.*?)(?=\.\s*Blockers captured:)")
-    blockers = field(r"Blockers captured:\s*(.*?)(?=\.\s*Change actions captured:)")
-    changes = field(r"Change actions captured:\s*(.*?)(?=\.\s*Decision fingerprint:)")
-    fingerprint = field(r"Decision fingerprint:\s*(.*?)(?:\.\s*Explain why|$)")
+    captured_at = field("Captured at:", "Engine:")
+    engine = field("Engine:", "Status:")
+    status = field("Status:", "Score:")
+    score = field("Score:", "Deterministic explanation:")
+    explanation = field("Deterministic explanation:", "Requirements captured:")
+    requirements = field("Requirements captured:", "Evidence records captured:")
+    evidence = field("Evidence records captured:", "Blockers captured:")
+    blockers = field("Blockers captured:", "Change actions captured:")
+    changes = field("Change actions captured:", "Decision fingerprint:")
+    fingerprint = field("Decision fingerprint:")
 
     parts: list[str] = []
     if status is not None and score is not None:
@@ -128,7 +133,7 @@ def _extract_historical_answer(content: str) -> str:
         parts.append("The supplied trace does not establish the recorded readiness status or score.")
 
     if explanation is not None:
-        parts.append(f"The deterministic explanation says: {explanation.rstrip('.')}.")
+        parts.append(f"The deterministic explanation says: {explanation}.")
 
     count_parts: list[str] = []
     if requirements is not None:
