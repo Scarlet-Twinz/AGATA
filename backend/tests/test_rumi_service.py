@@ -81,7 +81,7 @@ def test_explicit_historical_mode_is_deterministic_and_never_calls_ollama(monkey
     assert "initiate" not in answer.lower()
 
 
-def test_partial_historical_trace_does_not_invent_missing_fields():
+def test_partial_historical_trace_preserves_fields_before_truncated_next_label():
     trace = (
         "RUMI_MODE: HISTORICAL_TRACE Explain this AGATA readiness decision trace. "
         "Captured at: 9/14/2026, 7:57:43 AM. Engine: readiness-v2. Status: Not Ready. "
@@ -94,6 +94,28 @@ def test_partial_historical_trace_does_not_invent_missing_fields():
     assert "Not Ready" in answer
     assert "0%" in answer
     assert "2 of 2 requirements are blocking readiness" in answer
+    assert "2 requirements" in answer
+    assert "not established requirements" not in answer.lower()
+    assert "fingerprint" not in answer.lower()
+    assert "invalid" not in answer.lower()
+    assert "missing evidence" not in answer.lower()
+
+
+def test_partial_historical_trace_does_not_invent_missing_fields():
+    trace = (
+        "RUMI_MODE: HISTORICAL_TRACE Explain this AGATA readiness decision trace. "
+        "Captured at: 9/14/2026, 7:57:43 AM. Engine: readiness-v2. Status: Not Ready. "
+        "Score: 0%. Deterministic explanation: 2 of 2 requirements are blocking readiness. "
+        "Requirements captured: 2. Evidence records captured: 0"
+    )
+
+    answer = rumi._extract_historical_answer(trace)
+
+    assert "Not Ready" in answer
+    assert "0%" in answer
+    assert "2 of 2 requirements are blocking readiness" in answer
+    assert "2 requirements" in answer
+    assert "zero evidence records" in answer.lower()
     assert "fingerprint" not in answer.lower()
     assert "invalid" not in answer.lower()
     assert "missing evidence" not in answer.lower()
