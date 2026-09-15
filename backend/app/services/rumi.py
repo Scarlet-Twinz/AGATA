@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -58,20 +59,62 @@ def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[st
         "a claim that evidence was required, missing, invalid, expired, unverified, or unavailable for a requirement. "
         "Do not invent requirement meaning or operational details from requirement names. "
         "You may state that the listed requirements are blockers because the deterministic explanation says they block readiness. "
-        "Explain only the operational meaning directly supported by the trace. Preserve the exact deterministic result: "
-        "Not Ready, 0%, with 2 of 2 requirements blocking readiness."
+        "Explain only the operational meaning directly supported by the trace. Preserve the exact deterministic result. "
+        "If a fact is not in the trace, say it is not established by the trace."
     )
     return [compact_system, last_user]
+
+
+def _trace_value(text: str, label: str, stop_labels: tuple[str, ...]) -> str | None:
+    escaped = re.escape(label)
+    stops = "|".join(re.escape(item) for item in stop_labels)
+    match = re.search(rf"{escaped}:\s*(.*?)(?=\.\s*(?:{stops}):|$)", text, flags=re.IGNORECASE)
+    return match.group(1).strip() if match else None
+
+
+def _historical_trace_explanation(text: str) -> str:
+    """Produce a deterministic, trace-only explanation when historical mode is requested.
+
+    Historical decision traces are audit records. A language model must not reinterpret
+    missing fields or numeric counts as business facts, so this path intentionally uses
+    only values explicitly present in the supplied trace.
+    """
+    captured = _trace_value(text, "Captured at", ("Engine", "Status")) or "not established by the trace"
+    engine = _trace_value(text, "Engine", ("Status", "Score")) or "not established by the trace"
+    status = _trace_value(text, "Status", ("Score", "Deterministic explanation")) or "not established by the trace"
+    score = _trace_value(text, "Score", ("Deterministic explanation", "Requirements captured")) or "not established by the trace"
+    deterministic = _trace_value(text, "Deterministic explanation", ("Requirements captured", "Evidence records captured")) or "not established by the trace"
+    requirements = _trace_value(text, "Requirements captured", ("Evidence records captured", "Blockers captured")) or "not established by the trace"
+    evidence = _trace_value(text, "Evidence records captured", ("Blockers captured", "Change actions captured")) or "not established by the trace"
+    blockers = _trace_value(text, "Blockers captured", ("Change actions captured", "Decision fingerprint")) or "not established by the trace"
+    changes = _trace_value(text, "Change actions captured", ("Decision fingerprint",)) or "not established by the trace"
+    fingerprint = _trace_value(text, "Decision fingerprint", ()) or "not established by the trace"
+
+    return (
+        "The historical AGATA readiness decision was recorded as "
+        f"{status} with a score of {score}. The trace was captured at {captured} using engine {engine}. "
+        f"The deterministic explanation states: {deterministic} "
+        f"The trace records {requirements} requirements, {evidence} evidence records, "
+        f"{blockers} change blockers ({blockers.split('(', 1)[1].rsplit(')', 1)[0] if '(' in blockers and ')' in blockers else blockers}), "
+        f"and {changes} change actions. "
+        "The trace does not establish additional details about the requirements, evidence, their validity, "
+        "verification state, causes, or remediation attempts. "
+        f"The decision fingerprint for this recorded state is {fingerprint}."
+    )
 
 
 async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     settings = get_settings()
     url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
     timeout_seconds = max(settings.ollama_timeout_seconds, 180)
-    request_messages = _compact_historical_messages(messages) if _is_historical_trace(messages) else messages
+    if _is_historical_trace(messages):
+        last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+        if last_user:
+            yield _historical_trace_explanation(last_user.get("content", ""))
+        return
 
     try:
-        async for token in _stream(request_messages, url, settings.ollama_model, timeout_seconds):
+        async for token in _stream(messages, url, settings.ollama_model, timeout_seconds):
             yield token
     except httpx.ReadTimeout as exc:
         raise RumiUnavailableError("Rumi is temporarily unavailable: ReadTimeout.") from exc
