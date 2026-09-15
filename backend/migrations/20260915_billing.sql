@@ -81,11 +81,14 @@ CREATE INDEX IF NOT EXISTS ix_billing_webhook_events_provider ON billing_webhook
 
 -- AGATA launch pricing. Provider-specific recurring-plan IDs are intentionally
 -- left NULL until the corresponding provider test/live plans are created.
+-- Annual prices are equivalent to 10 months of the monthly price (2 months free).
 INSERT INTO billing_plans (id, code, name, description, currency, amount_minor, interval, active)
 VALUES
     ('00000000-0000-0000-0000-000000000001', 'foundation', 'AGATA Foundation', 'Free workspace for getting started with compliance readiness, core evidence tracking, deterministic readiness, Rumi guidance, and audit history.', 'USD', 0, 'monthly', TRUE),
     ('00000000-0000-0000-0000-000000000002', 'professional', 'AGATA Professional', 'For growing contractor and project teams: full readiness intelligence, Decision Lens, Decision Impact, History, Replay, Rumi, notifications, remediation, audit trail, and operational reporting.', 'USD', 2900, 'monthly', TRUE),
-    ('00000000-0000-0000-0000-000000000003', 'business', 'AGATA Business', 'For larger teams: expanded workspace capacity, advanced decision intelligence, team controls, analytics, reporting, and API-ready operations.', 'USD', 7900, 'monthly', TRUE)
+    ('00000000-0000-0000-0000-000000000003', 'business', 'AGATA Business', 'For larger teams: expanded workspace capacity, advanced decision intelligence, team controls, analytics, reporting, and API-ready operations.', 'USD', 7900, 'monthly', TRUE),
+    ('00000000-0000-0000-0000-000000000004', 'professional_annual', 'AGATA Professional Annual', 'Professional plan billed annually with two months free compared with monthly billing.', 'USD', 29000, 'yearly', TRUE),
+    ('00000000-0000-0000-0000-000000000005', 'business_annual', 'AGATA Business Annual', 'Business plan billed annually with two months free compared with monthly billing.', 'USD', 79000, 'yearly', TRUE)
 ON CONFLICT (code) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,
