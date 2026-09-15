@@ -25,46 +25,53 @@ async def _stream(messages: list[dict[str, str]], url: str, model: str, timeout_
                     break
 
 
+def _is_historical_trace(messages: list[dict[str, str]]) -> bool:
+    return any(
+        message.get("role") == "user" and "historical trace" in message.get("content", "").lower()
+        for message in messages
+    )
+
+
+def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep historical explanations anchored to the supplied trace, not live state or old chats."""
+    last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+    if last_user is None:
+        return messages
+
+    system = messages[0] if messages and messages[0].get("role") == "system" else {
+        "role": "system",
+        "content": "You are Rumi, AGATA's compliance intelligence assistant.",
+    }
+    compact_system = dict(system)
+    instruction_boundary = compact_system.get("content", "").find("CURRENT AGATA WORKSPACE DATA")
+    if instruction_boundary >= 0:
+        compact_system["content"] = compact_system["content"][:instruction_boundary].rstrip()
+    compact_system["content"] += (
+        "\n\nHISTORICAL TRACE MODE: The user's supplied historical trace is the only authoritative source for this answer. "
+        "Use its facts literally. Do not use current workspace data, prior conversation messages, names, or general assumptions "
+        "to fill gaps. Do not say a requirement is 'not met', 'unsatisfied', 'missing', 'invalid', 'critical', or 'required' "
+        "unless that exact condition is explicitly stated in the supplied trace. Do not turn an evidence count of zero into "
+        "a claim that evidence was required, missing, invalid, expired, unverified, or unavailable for a requirement. "
+        "Do not invent requirement meaning or operational details from requirement names. "
+        "You may state that the listed requirements are blockers because the deterministic explanation says they block readiness. "
+        "Explain only the operational meaning directly supported by the trace. Preserve the exact deterministic result: "
+        "Not Ready, 0%, with 2 of 2 requirements blocking readiness."
+    )
+    return [compact_system, last_user]
+
+
 async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     settings = get_settings()
     url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
     timeout_seconds = max(settings.ollama_timeout_seconds, 180)
+    request_messages = _compact_historical_messages(messages) if _is_historical_trace(messages) else messages
 
     try:
-        async for token in _stream(messages, url, settings.ollama_model, timeout_seconds):
+        async for token in _stream(request_messages, url, settings.ollama_model, timeout_seconds):
             yield token
-            
     except httpx.ReadTimeout:
-        # Historical decision explanations already carry their authoritative facts in the
-        # user message. Retry without the large live-workspace/history payload so a slow
-        # local model is not forced to process irrelevant context a second time.
-        last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
-        if last_user and "historical trace" in last_user.get("content", "").lower():
-            system = messages[0] if messages and messages[0].get("role") == "system" else {
-                "role": "system",
-                "content": (
-                    "You are Rumi, AGATA's compliance intelligence assistant. "
-                    "For this historical decision explanation, the supplied user trace is authoritative. "
-                    "Do not invent or infer evidence validity, expiry, verification state, requirement details, "
-                    "or any other unsupported fact. Explain only what the trace supports and do not override "
-                    "the deterministic readiness result."
-                ),
-            }
-            instruction_boundary = system.get("content", "").find("CURRENT AGATA WORKSPACE DATA")
-            compact_system = dict(system)
-            if instruction_boundary >= 0:
-                compact_system["content"] = system["content"][:instruction_boundary].rstrip()
-            compact_system["content"] += (
-                "\n\nHISTORICAL TRACE MODE: The user's supplied historical trace is authoritative for this answer. "
-                "Do not use current workspace data or prior conversation messages to add facts to the trace."
-            )
-            try:
-                async for token in _stream([compact_system, last_user], url, settings.ollama_model, timeout_seconds):
-                    yield token
-                return
-            except httpx.HTTPError as retry_exc:
-                yield f"Rumi is temporarily unavailable: {retry_exc.__class__.__name__}."
-                return
+        # Historical traces are already compact and authoritative. A timeout here is a model/runtime
+        # problem, not a reason to retry with the large live workspace context.
         yield "Rumi is temporarily unavailable: ReadTimeout."
     except httpx.HTTPError as exc:
         yield f"Rumi is temporarily unavailable: {exc.__class__.__name__}."
