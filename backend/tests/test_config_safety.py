@@ -46,6 +46,8 @@ def test_production_accepts_explicit_external_services() -> None:
         database_url="postgresql+psycopg://agata:secret@db.example.com:5432/agata",
         cors_origins="https://app.example.com,https://www.example.com",
         ollama_base_url="https://rumi.example.com",
+        resend_api_key="re_test_explicit-production-test-value",
+        email_from="AGATA <support@example.com>",
         paystack_secret_key="sk_test_explicit-production-test-value",
     )
 
