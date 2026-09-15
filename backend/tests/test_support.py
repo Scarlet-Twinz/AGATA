@@ -6,10 +6,18 @@ from app.api import support
 
 @pytest.mark.anyio
 async def test_support_request_sends_sanitized_html(monkeypatch) -> None:
-    captured: dict[str, str] = {}
+    captured: dict[str, str | None] = {}
 
-    async def fake_send_email(*, to: str, subject: str, html: str, text: str, category: str) -> None:
-        captured.update(to=to, subject=subject, html=html, text=text, category=category)
+    async def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        html: str,
+        text: str,
+        category: str,
+        reply_to: str | None = None,
+    ) -> None:
+        captured.update(to=to, subject=subject, html=html, text=text, category=category, reply_to=reply_to)
 
     monkeypatch.setattr(support, "send_email", fake_send_email)
 
@@ -23,11 +31,12 @@ async def test_support_request_sends_sanitized_html(monkeypatch) -> None:
     )
 
     assert result["accepted"] is True
-    assert captured["to"] == support.SUPPORT_EMAIL
+    assert captured["to"] == "anthonyemmanuella297@gmail.com"
     assert captured["category"] == "support"
-    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in captured["html"]
-    assert "<script>" not in captured["html"]
-    assert "user@example.com" in captured["text"]
+    assert captured["reply_to"] == "user@example.com"
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in str(captured["html"])
+    assert "<script>" not in str(captured["html"])
+    assert "user@example.com" in str(captured["text"])
 
 
 @pytest.mark.anyio
