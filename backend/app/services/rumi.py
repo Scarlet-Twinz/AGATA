@@ -69,12 +69,8 @@ def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[st
 
 
 def _extract_historical_answer(content: str) -> str:
-    """Build a safe natural-language explanation from an immutable trace envelope.
-
-    Historical replay is a compliance/audit surface, so deterministic grounding is more
-    important than allowing a small local model to improvise an explanation.
-    """
-    def field(pattern: str, default: str = "not established") -> str:
+    """Build a safe natural-language explanation from an immutable trace envelope."""
+    def field(pattern: str, default: str | None = None) -> str | None:
         match = re.search(pattern, content, flags=re.IGNORECASE)
         return match.group(1).strip() if match else default
 
@@ -89,17 +85,61 @@ def _extract_historical_answer(content: str) -> str:
     changes = field(r"Change actions captured:\s*(.*?)(?=\.\s*Decision fingerprint:)")
     fingerprint = field(r"Decision fingerprint:\s*(.*?)(?:\.\s*Explain why|$)")
 
-    return (
-        f"The recorded AGATA readiness decision is {status} at {score}. "
-        f"The deterministic explanation says: {explanation} "
-        f"The trace captured {requirements} requirements, {evidence} evidence records, "
-        f"{blockers} blockers, and {changes} change actions. "
-        f"The recorded blockers are {blockers}. "
-        f"The trace does not establish why those requirements are blocking readiness beyond the deterministic explanation, "
-        f"nor does it establish what the zero evidence or change-action counts mean beyond those recorded counts. "
-        f"So the decision-maker can conclude only what this trace explicitly records; additional causes or remediation details are not established here. "
-        f"Captured at {captured_at} using {engine}, fingerprint {fingerprint}."
+    parts: list[str] = []
+    if status is not None and score is not None:
+        parts.append(f"The recorded AGATA readiness decision is {status} at {score}.")
+    elif status is not None:
+        parts.append(f"The recorded AGATA readiness decision is {status}.")
+    elif score is not None:
+        parts.append(f"The recorded readiness score is {score}.")
+    else:
+        parts.append("The supplied trace does not establish the recorded readiness status or score.")
+
+    if explanation is not None:
+        parts.append(f"The deterministic explanation says: {explanation.rstrip('.')}.")
+
+    count_parts: list[str] = []
+    if requirements is not None:
+        count_parts.append(f"{requirements} requirements")
+    if evidence is not None:
+        evidence_word = "zero" if evidence == "0" else evidence
+        count_parts.append(f"{evidence_word} evidence records")
+    if blockers is not None:
+        blocker_match = re.fullmatch(r"(\d+)\s*\((.*)\)", blockers)
+        count_parts.append(f"{blocker_match.group(1) if blocker_match else blockers} blockers")
+    if changes is not None:
+        change_word = "zero" if changes == "0" else changes
+        count_parts.append(f"{change_word} change actions")
+    if count_parts:
+        if len(count_parts) == 1:
+            parts.append(f"The trace captured {count_parts[0]}.")
+        else:
+            parts.append(f"The trace captured {', '.join(count_parts[:-1])}, and {count_parts[-1]}.")
+
+    if blockers is not None:
+        blocker_match = re.fullmatch(r"(\d+)\s*\((.*)\)", blockers)
+        if blocker_match:
+            blocker_count, blocker_names = blocker_match.groups()
+            parts.append(f"The recorded blockers are {blocker_names} ({blocker_count} total).")
+        else:
+            parts.append(f"The recorded blocker count is {blockers}.")
+
+    parts.append(
+        "The trace does not establish why the listed requirements are blocking readiness beyond the deterministic explanation, "
+        "and it does not establish meanings or causes for recorded counts unless those facts are explicitly present."
     )
+
+    metadata: list[str] = []
+    if captured_at is not None:
+        metadata.append(f"Captured at {captured_at}")
+    if engine is not None:
+        metadata.append(f"using {engine}")
+    if fingerprint is not None:
+        metadata.append(f"fingerprint {fingerprint}")
+    if metadata:
+        parts.append("; ".join(metadata) + ".")
+
+    return " ".join(parts)
 
 
 async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
