@@ -24,6 +24,7 @@ from app.api.remediation import router as remediation_router
 from app.api.requirement_management import router as requirement_management_router
 from app.api.resources import router as resources_router
 from app.api.rumi import router as rumi_router
+from app.api.support import router as support_router
 from app.api.workspace_admin import router as workspace_admin_router
 from app.api.workspace_invitations import router as workspace_invitations_router
 from app.core.config import get_settings
@@ -53,6 +54,7 @@ app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan, depen
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_router)
 app.include_router(billing_router)
+app.include_router(support_router)
 app.include_router(dashboard_consistency_router)
 app.include_router(evidence_management_router)
 app.include_router(resources_router)
