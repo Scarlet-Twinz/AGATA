@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     resend_api_key: str = ""
     email_from: str = "AGATA <onboarding@resend.dev>"
+    support_email: str = "anthonyemmanuella297@gmail.com"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:3b-instruct"
     ollama_timeout_seconds: int = 120
@@ -53,6 +54,8 @@ class Settings(BaseSettings):
                 raise ValueError("RESEND_API_KEY must be configured in production")
             if not self.email_from.strip() or "onboarding@resend.dev" in self.email_from.lower():
                 raise ValueError("EMAIL_FROM must use a verified production sender")
+            if not self.support_email.strip() or "@" not in self.support_email:
+                raise ValueError("SUPPORT_EMAIL must be a valid support destination")
             if self.billing_default_provider == "paystack" and not self.paystack_secret_key:
                 raise ValueError("PAYSTACK_SECRET_KEY must be configured in production")
             if self.billing_default_provider == "stripe" and not self.stripe_secret_key:
