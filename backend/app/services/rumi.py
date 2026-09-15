@@ -94,6 +94,22 @@ def _prior_user_message(messages: list[dict[str, str]]) -> str | None:
     return user_messages[-2].strip()
 
 
+def _standalone_name_candidate(content: str) -> str | None:
+    """Recognize a standalone name-style turn without asking the LLM to rewrite it."""
+    normalized = content.strip()
+    if not normalized or not normalized.isupper() or not re.fullmatch(r"[A-Z][A-Z' -]{1,59}", normalized):
+        return None
+    casual = {
+        "HI", "HELLO", "HEY", "YO", "SUP", "HIYA", "THANKS", "THANK YOU", "THX", "OK", "OKAY",
+        "ALRIGHT", "COOL", "NICE", "SO", "AND", "WHAT'S UP", "WHATS UP", "HOW ARE YOU", "TEST", "PING",
+    }
+    if normalized in casual:
+        return None
+    if len(normalized.split()) > 3:
+        return None
+    return normalized
+
+
 def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     """Give the model only the historical request and strict trace-grounding instructions."""
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
@@ -213,6 +229,12 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
 
     model_messages = messages
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+    if last_user is not None:
+        standalone_name = _standalone_name_candidate(last_user.get("content", ""))
+        if standalone_name:
+            yield f"Got it — I'll call you {standalone_name}."
+            return
+
     if _is_memory_mode(messages) and last_user is not None:
         content = last_user.get("content", "")
         memory_name = _declared_name(content)
