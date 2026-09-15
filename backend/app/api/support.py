@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import html
-import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.config import get_settings
 from app.services.email import EmailDeliveryError, send_email
 
 router = APIRouter(prefix="/api/support", tags=["support"])
-SUPPORT_EMAIL = os.getenv("AGATA_SUPPORT_EMAIL", "anthonyemmanuella297@gmail.com")
 
 
 class SupportRequest(BaseModel):
@@ -37,6 +36,8 @@ class SupportRequest(BaseModel):
 
 @router.post("", status_code=202)
 async def submit_support_request(payload: SupportRequest):
+    settings = get_settings()
+    support_email = settings.support_email
     subject = f"[AGATA Support] {payload.topic} — {payload.name}"
     text = f"Name: {payload.name}\nEmail: {payload.email}\nTopic: {payload.topic}\n\n{payload.message}"
     safe_name = html.escape(payload.name)
@@ -53,7 +54,14 @@ async def submit_support_request(payload: SupportRequest):
         f"<p><small>Subject: {safe_subject}</small></p>"
     )
     try:
-        await send_email(to=SUPPORT_EMAIL, subject=subject, html=html_body, text=text, category="support")
+        await send_email(
+            to=support_email,
+            subject=subject,
+            html=html_body,
+            text=text,
+            category="support",
+            reply_to=payload.email,
+        )
     except EmailDeliveryError as exc:
         raise HTTPException(status_code=503, detail="AGATA could not deliver your support request right now. Please email support directly.") from exc
     return {"accepted": True, "message": "Your message has been sent to AGATA support."}
