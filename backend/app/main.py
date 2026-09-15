@@ -39,6 +39,7 @@ from app.models import readiness_trace  # noqa: F401
 from app.models import remediation  # noqa: F401
 from app.models import rumi  # noqa: F401
 from app.models import workspace  # noqa: F401
+from app.services import entitlement_guards  # noqa: F401
 from app.services.rbac import enforce_request_permission
 
 settings = get_settings()
