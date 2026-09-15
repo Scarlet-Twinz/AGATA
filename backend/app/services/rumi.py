@@ -36,7 +36,11 @@ def _is_historical_trace(messages: list[dict[str, str]]) -> bool:
     if not last_user:
         return False
     content = " ".join(last_user.get("content", "").lower().split())
-    return "rumi_mode: historical_trace" in content or ("historical trace" in content and "readiness decision" in content)
+    return (
+        "rumi_mode: historical_trace" in content
+        or "readiness decision trace" in content
+        or ("historical trace" in content and "readiness decision" in content)
+    )
 
 
 def _is_memory_mode(messages: list[dict[str, str]]) -> bool:
@@ -176,13 +180,10 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     if _is_historical_trace(messages):
         last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
         if last_user is not None:
-            # Historical explanations are an audit surface. Do not allow the local model
-            # to introduce unsupported causal claims even when the prompt forbids them.
             yield _extract_historical_answer(last_user.get("content", ""))
         return
 
     model_messages = messages
-    memory_name = None
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
     if _is_memory_mode(messages) and last_user is not None:
         memory_name = _declared_name(last_user.get("content", ""))
