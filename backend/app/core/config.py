@@ -49,6 +49,10 @@ class Settings(BaseSettings):
                 raise ValueError("DATABASE_URL must point to a non-local database in production")
             if self.ollama_base_url.startswith(("http://127.0.0.1", "http://localhost")):
                 raise ValueError("OLLAMA_BASE_URL must point to a reachable production Rumi service")
+            if not self.resend_api_key:
+                raise ValueError("RESEND_API_KEY must be configured in production")
+            if not self.email_from.strip() or "onboarding@resend.dev" in self.email_from.lower():
+                raise ValueError("EMAIL_FROM must use a verified production sender")
             if self.billing_default_provider == "paystack" and not self.paystack_secret_key:
                 raise ValueError("PAYSTACK_SECRET_KEY must be configured in production")
             if self.billing_default_provider == "stripe" and not self.stripe_secret_key:
