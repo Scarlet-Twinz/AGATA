@@ -37,6 +37,35 @@ def _subscription_payload(item: BillingSubscription, plan: BillingPlan) -> dict:
     return {"id": str(item.id), "provider": item.provider, "plan": _plan_payload(plan), "status": item.status, "current_period_start": item.current_period_start, "current_period_end": item.current_period_end, "cancel_at_period_end": item.cancel_at_period_end}
 
 
+def _paystack_plan_code(data: dict, metadata: dict) -> str | None:
+    if metadata.get("plan_code"):
+        return str(metadata["plan_code"])
+    provider_plan = data.get("plan")
+    if isinstance(provider_plan, dict):
+        code = provider_plan.get("plan_code") or provider_plan.get("plan_code_id")
+        if code:
+            return str(code)
+    if provider_plan:
+        return str(provider_plan)
+    return None
+
+
+def _provider_customer_id(data: dict) -> str | None:
+    customer = data.get("customer")
+    if isinstance(customer, dict):
+        customer = customer.get("customer_code") or customer.get("id")
+    return str(customer) if customer else None
+
+
+def _provider_subscription_id(data: dict, provider: BillingProvider) -> str | None:
+    subscription = data.get("subscription") or data.get("subscription_code")
+    if isinstance(subscription, dict):
+        subscription = subscription.get("subscription_code") or subscription.get("id")
+    if provider == BillingProvider.STRIPE and data.get("object") == "subscription":
+        subscription = data.get("id")
+    return str(subscription) if subscription else None
+
+
 @router.get("/plans")
 def list_plans(db: Session = Depends(get_db), _: User = Depends(require_permission("billing.view"))):
     plans = db.scalars(select(BillingPlan).where(BillingPlan.active.is_(True)).order_by(BillingPlan.amount_minor.asc(), BillingPlan.interval.asc())).all()
@@ -72,6 +101,16 @@ async def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db
         result = await get_adapter(provider).create_checkout(email=user.email, plan=plan, company_id=str(user.company_id))
     except BillingProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if result.provider_customer_id:
+        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.company_id == user.company_id, BillingCustomer.provider == provider))
+        if customer is None:
+            db.add(BillingCustomer(company_id=user.company_id, provider=provider, provider_customer_id=result.provider_customer_id, email=user.email))
+        else:
+            customer.provider_customer_id = result.provider_customer_id
+            customer.email = user.email
+        db.commit()
+
     return {"provider": provider, "authorization_url": result.authorization_url, "reference": result.provider_reference}
 
 
@@ -95,31 +134,40 @@ async def receive_webhook(provider: BillingProvider, request: Request, db: Sessi
 
     data = payload.get("data") or {}
     metadata = data.get("metadata") or data.get("meta") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
     company_id = None
     if metadata.get("company_id"):
         try:
             company_id = UUID(str(metadata["company_id"]))
         except ValueError:
             pass
-    provider_customer_id = data.get("customer")
-    if isinstance(provider_customer_id, dict):
-        provider_customer_id = provider_customer_id.get("customer_code") or provider_customer_id.get("id")
+
+    provider_customer_id = _provider_customer_id(data)
     if company_id is None and provider_customer_id:
-        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.provider == provider, BillingCustomer.provider_customer_id == str(provider_customer_id)))
+        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.provider == provider, BillingCustomer.provider_customer_id == provider_customer_id))
         if customer:
             company_id = customer.company_id
 
     plan_code = metadata.get("plan_code")
-    plan = db.scalar(select(BillingPlan).where(BillingPlan.code == plan_code)) if plan_code else None
-    provider_subscription_id = data.get("subscription") or data.get("subscription_code")
-    if provider == BillingProvider.STRIPE and data.get("object") == "subscription":
-        provider_subscription_id = data.get("id")
+    if provider == BillingProvider.PAYSTACK:
+        plan_code = _paystack_plan_code(data, metadata) or plan_code
+    plan = None
+    if plan_code:
+        plan = db.scalar(select(BillingPlan).where(BillingPlan.code == str(plan_code)))
+    if plan is None and provider == BillingProvider.PAYSTACK:
+        provider_plan_code = _paystack_plan_code(data, {})
+        if provider_plan_code:
+            plan = db.scalar(select(BillingPlan).where(BillingPlan.paystack_plan_code == provider_plan_code))
+
+    provider_subscription_id = _provider_subscription_id(data, provider)
     if provider_customer_id and company_id:
         customer = db.scalar(select(BillingCustomer).where(BillingCustomer.company_id == company_id, BillingCustomer.provider == provider))
         if customer is None:
-            db.add(BillingCustomer(company_id=company_id, provider=provider, provider_customer_id=str(provider_customer_id), email=str(data.get("email") or "")))
-        elif customer.provider_customer_id != str(provider_customer_id):
-            customer.provider_customer_id = str(provider_customer_id)
+            db.add(BillingCustomer(company_id=company_id, provider=provider, provider_customer_id=provider_customer_id, email=str(data.get("email") or "")))
+        elif customer.provider_customer_id != provider_customer_id:
+            customer.provider_customer_id = provider_customer_id
 
     active_events = {"checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "invoice.paid", "subscription.create", "charge.success", "payment.completed"}
     failed_events = {"invoice.payment_failed", "subscription.not_renew"}
@@ -128,18 +176,24 @@ async def receive_webhook(provider: BillingProvider, request: Request, db: Sessi
     if company_id and (event_type in active_events or event_type in failed_events or event_type in canceled_events):
         subscription = None
         if provider_subscription_id:
-            subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider, BillingSubscription.provider_subscription_id == str(provider_subscription_id)))
+            subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider, BillingSubscription.provider_subscription_id == provider_subscription_id))
         if subscription is None:
             subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == company_id, BillingSubscription.provider == provider).order_by(BillingSubscription.created_at.desc()))
 
         if event_type in active_events:
             if subscription is None and plan:
-                subscription = BillingSubscription(company_id=company_id, plan_id=plan.id, provider=provider, provider_subscription_id=str(provider_subscription_id) if provider_subscription_id else None, provider_customer_id=str(provider_customer_id) if provider_customer_id else None, status=SubscriptionStatus.ACTIVE)
+                subscription = BillingSubscription(company_id=company_id, plan_id=plan.id, provider=provider, provider_subscription_id=provider_subscription_id, provider_customer_id=provider_customer_id, status=SubscriptionStatus.ACTIVE)
                 db.add(subscription)
+                db.flush()
             elif subscription:
                 subscription.status = SubscriptionStatus.ACTIVE
                 if provider_customer_id:
-                    subscription.provider_customer_id = str(provider_customer_id)
+                    subscription.provider_customer_id = provider_customer_id
+                if plan and subscription.plan_id != plan.id:
+                    subscription.plan_id = plan.id
+                if provider_subscription_id and not subscription.provider_subscription_id:
+                    subscription.provider_subscription_id = provider_subscription_id
+
             if event_type in {"charge.success", "payment.completed", "invoice.paid"} and subscription:
                 amount = int(data.get("amount") or data.get("amount_total") or (plan.amount_minor if plan else 0))
                 currency = str(data.get("currency") or (plan.currency if plan else "USD")).upper()
