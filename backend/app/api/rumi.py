@@ -67,9 +67,7 @@ def _workspace_context(db: Session, company_id) -> str:
     requirements = db.scalars(select(Requirement).where(Requirement.company_id == company_id).order_by(Requirement.name.asc())).all()
     documents = db.scalars(select(Document).where(Document.company_id == company_id).order_by(Document.created_at.desc())).all()
     intelligence_rows = db.scalars(
-        select(EvidenceIntelligence)
-        .join(Document, Document.id == EvidenceIntelligence.document_id)
-        .where(Document.company_id == company_id)
+        select(EvidenceIntelligence).join(Document, Document.id == EvidenceIntelligence.document_id).where(Document.company_id == company_id)
     ).all()
     assignments = db.execute(
         select(ProjectContractor.project_id, ProjectContractor.contractor_id)
@@ -114,10 +112,8 @@ def _workspace_context(db: Session, company_id) -> str:
         for project_id, contractor_id in assignments:
             result = calculate_readiness(db, company_id, project_id, contractor_id)
             lines.append(
-                f"- Project: {project_names.get(project_id, 'Unknown project')} | "
-                f"Contractor: {contractor_names.get(contractor_id, 'Unknown contractor')} | "
-                f"Status: {result['status'].replace('_', ' ')} | Score: {result['score']}% | "
-                f"Explanation: {result['explanation']}"
+                f"- Project: {project_names.get(project_id, 'Unknown project')} | Contractor: {contractor_names.get(contractor_id, 'Unknown contractor')} | "
+                f"Status: {result['status'].replace('_', ' ')} | Score: {result['score']}% | Explanation: {result['explanation']}"
             )
     else:
         lines.append("- No project-contractor assignments yet.")
@@ -147,17 +143,14 @@ def _workspace_context(db: Session, company_id) -> str:
                 intelligence_state = "legacy/no intelligence record"
             else:
                 intelligence_state = (
-                    f"verification={intelligence.verification_status}; "
-                    f"review={intelligence.review_status}; "
-                    f"source={intelligence.source_type}; "
-                    f"confidence={intelligence.confidence if intelligence.confidence is not None else 'not set'}"
+                    f"verification={intelligence.verification_status}; review={intelligence.review_status}; "
+                    f"source={intelligence.source_type}; confidence={intelligence.confidence if intelligence.confidence is not None else 'not set'}"
                 )
                 if intelligence.rejection_reason:
                     intelligence_state += f"; rejection_reason={intelligence.rejection_reason}"
             lines.append(
-                f"- {document.name} | Type: {document.document_type} | Contractor: {contractor} | "
-                f"Status: {document.status} | Expiry: {expiry} | Mapped requirements: {mapped} | "
-                f"Intelligence: {intelligence_state}"
+                f"- {document.name} | Type: {document.document_type} | Contractor: {contractor} | Status: {document.status} | "
+                f"Expiry: {expiry} | Mapped requirements: {mapped} | Intelligence: {intelligence_state}"
             )
     else:
         lines.append("- No evidence records yet.")
@@ -200,13 +193,10 @@ def _conversation_history_context(db: Session, user: User, current_id: UUID) -> 
         .order_by(RumiConversation.updated_at.desc())
         .limit(30)
     ).all()
-    lines = [
-        "RUMI CONVERSATION HISTORY (user-scoped memory; use only for questions about prior Rumi conversations):",
-    ]
+    lines = ["RUMI CONVERSATION HISTORY (user-scoped memory; use only for questions about prior Rumi conversations):"]
     if not conversations:
         lines.append("- No previous conversations are available.")
         return "\n".join(lines)
-
     for conversation in conversations:
         messages = db.scalars(
             select(RumiMessageRecord)
@@ -219,10 +209,35 @@ def _conversation_history_context(db: Session, user: User, current_id: UUID) -> 
         questions = " | ".join(message.content.replace("\n", " ")[:220] for message in messages)
         marker = " current conversation" if conversation.id == current_id else ""
         lines.append(
-            f"- Title: {conversation.title} | Created: {conversation.created_at.isoformat()} | "
-            f"Updated: {conversation.updated_at.isoformat()} |{marker} User questions: {questions}"
+            f"- Title: {conversation.title} | Created: {conversation.created_at.isoformat()} | Updated: {conversation.updated_at.isoformat()} |"
+            f"{marker} User questions: {questions}"
         )
     return "\n".join(lines)
+
+
+def _is_historical_trace_request(message: dict[str, str] | None) -> bool:
+    if not message or message.get("role") != "user":
+        return False
+    content = message.get("content", "").lower()
+    return "historical trace" in content and "readiness decision" in content
+
+
+def _historical_system() -> dict[str, str]:
+    return {
+        "role": "system",
+        "content": (
+            "You are Rumi, the compliance intelligence assistant inside AGATA.\n\n"
+            "HISTORICAL TRACE MODE: The user's supplied historical trace is the only authoritative source for this answer. "
+            "Use its facts literally. Do not use current workspace data, prior conversation messages, names, or general assumptions to fill gaps. "
+            "Do not say a requirement is 'not met', 'unsatisfied', 'missing', 'invalid', 'critical', or 'required' unless that exact condition is explicitly stated in the supplied trace. "
+            "Do not turn an evidence count of zero into a claim that evidence was required, missing, invalid, expired, unverified, or unavailable for a requirement. "
+            "Do not invent requirement meaning or operational details from requirement names. "
+            "You may state that the listed requirements are blockers because the deterministic explanation says they block readiness. "
+            "You may explain the operational significance of the supplied blocker/change-action counts, but do not invent a cause. "
+            "Preserve the deterministic result exactly: Not Ready, 0%, with 2 of 2 requirements blocking readiness. "
+            "If a fact is not in the trace, say it is not established by the trace. Keep the explanation concise and decision-focused."
+        ),
+    }
 
 
 @router.get("/conversations/current", response_model=ConversationResponse)
@@ -235,9 +250,7 @@ def current_conversation(db: Session = Depends(get_db), user: User = Depends(get
 @router.get("/conversations", response_model=list[ConversationResponse])
 def conversations(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[ConversationResponse]:
     items = db.scalars(
-        select(RumiConversation)
-        .where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id)
-        .order_by(RumiConversation.updated_at.desc())
+        select(RumiConversation).where(RumiConversation.user_id == user.id, RumiConversation.company_id == user.company_id).order_by(RumiConversation.updated_at.desc())
     ).all()
     return [ConversationResponse.model_validate(item) for item in items]
 
@@ -257,12 +270,7 @@ def create_conversation(db: Session = Depends(get_db), user: User = Depends(get_
 
 
 @router.patch("/conversations/{conversation_id}", response_model=ConversationResponse)
-def rename_conversation(
-    conversation_id: UUID,
-    payload: ConversationTitleUpdate,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> ConversationResponse:
+def rename_conversation(conversation_id: UUID, payload: ConversationTitleUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ConversationResponse:
     conversation = _get_conversation(db, user, conversation_id)
     conversation.title = payload.title.strip()
     if not conversation.title:
@@ -273,11 +281,7 @@ def rename_conversation(
 
 
 @router.delete("/conversations/{conversation_id}", status_code=204)
-def delete_conversation(
-    conversation_id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> None:
+def delete_conversation(conversation_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
     conversation = _get_conversation(db, user, conversation_id)
     db.delete(conversation)
     db.commit()
@@ -300,37 +304,40 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
         db.add(RumiMessageRecord(conversation_id=conversation.id, role="user", content=last_user["content"]))
         db.commit()
 
+    historical = _is_historical_trace_request(last_user)
     history = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
-    context = _workspace_context(db, user.company_id)
-    conversation_history = _conversation_history_context(db, user, conversation.id)
-    system = {
-        "role": "system",
-        "content": (
-            "You are Rumi, the compliance intelligence assistant inside AGATA. "
-            "Use only the CURRENT AGATA WORKSPACE DATA below for business facts. It is authoritative. "
-            "Never invent, guess, or infer company data. AGATA is a product/platform: always refer to AGATA as 'it', never 'he' or 'she'. "
-            "Never infer a contractor's gender from a name; use the contractor's name or 'the contractor'. "
-            "Do not expose database IDs unless the user explicitly asks. Prefer human-readable names.\n\n"
-            "READINESS RULES: Report the exact current project-contractor result, including status, score, and explanation. "
-            "Do not turn one project's result into a global contractor status. If multiple projects exist, show each relevant project. "
-            "The current readiness facts are calculated from the current requirements and evidence, not from stale historical checks.\n\n"
-            "EVIDENCE RULES: Use the evidence intelligence state when present. Explain actual attention reasons such as expired, expiring, unverified, rejected, requires review, invalid, or unmapped only when the supplied data supports them. "
-            "Do not describe legacy/no-intelligence evidence as verified.\n\n"
-            "CONVERSATION MEMORY RULES: You may use RUMI CONVERSATION HISTORY only to answer questions about the user's previous Rumi conversations. "
-            "If asked what the user asked earlier, last week, on a particular date, or in a prior conversation, use the supplied history index and be explicit when the available index does not contain enough detail. "
-            "Do not use conversation history as evidence for current workspace business facts.\n\n"
-            "PRODUCT GUIDANCE RULES: Rumi is also AGATA's in-product guide. When the user asks how to create, find, review, upload, assign, manage, or navigate within AGATA, explain the workflow clearly and give a navigation action when a relevant destination exists. "
-            "Use only these internal destinations: Projects=/projects; Contractors=/contractors; Requirements=/requirements; Evidence=/evidence; Readiness=/readiness; Remediation=/remediation; Rumi=/rumi; Insights=/insights; Notifications=/notifications; Team=/team; Settings=/settings; Billing & Plan=/billing; Usage=/usage; Audit Trail=/audit; Command Center=/dashboard. "
-            "For a navigation action, use Markdown link syntax exactly like [Open Projects](/projects). Only use one of the destinations listed above. "
-            "Do not claim that Rumi has performed an action unless the user explicitly asks for an available action and AGATA provides that action. When the user asks how to create something, guide them to the relevant workspace and describe the next steps; do not pretend to create it.\n\n"
-            "GREETING/IDENTITY RULES: If asked who you are, say you are Rumi, AGATA's compliance intelligence assistant. Keep it brief. "
-            "If the answer is not supported by the supplied data, say so instead of guessing. Keep answers concise and practical.\n\n"
-            + context
-            + "\n\n"
-            + conversation_history
-        ),
-    }
-    messages = [system, *[{"role": item.role, "content": item.content} for item in history]]
+
+    if historical:
+        messages = [_historical_system(), last_user]
+    else:
+        context = _workspace_context(db, user.company_id)
+        conversation_history = _conversation_history_context(db, user, conversation.id)
+        system = {
+            "role": "system",
+            "content": (
+                "You are Rumi, the compliance intelligence assistant inside AGATA. "
+                "Use only the CURRENT AGATA WORKSPACE DATA below for business facts. It is authoritative. "
+                "Never invent, guess, or infer company data. AGATA is a product/platform: always refer to AGATA as 'it', never 'he' or 'she'. "
+                "Never infer a contractor's gender from a name; use the contractor's name or 'the contractor'. "
+                "Do not expose database IDs unless the user explicitly asks. Prefer human-readable names.\n\n"
+                "READINESS RULES: Report the exact current project-contractor result, including status, score, and explanation. "
+                "Do not turn one project's result into a global contractor status. If multiple projects exist, show each relevant project. "
+                "The current readiness facts are calculated from the current requirements and evidence, not from stale historical checks.\n\n"
+                "EVIDENCE RULES: Use the evidence intelligence state when present. Explain actual attention reasons such as expired, expiring, unverified, rejected, requires review, invalid, or unmapped only when the supplied data supports them. "
+                "Do not describe legacy/no-intelligence evidence as verified.\n\n"
+                "CONVERSATION MEMORY RULES: You may use RUMI CONVERSATION HISTORY only to answer questions about the user's previous Rumi conversations. "
+                "If asked what the user asked earlier, last week, on a particular date, or in a prior conversation, use the supplied history index and be explicit when the available index does not contain enough detail. "
+                "Do not use conversation history as evidence for current workspace business facts.\n\n"
+                "PRODUCT GUIDANCE RULES: Rumi is also AGATA's in-product guide. When the user asks how to create, find, review, upload, assign, manage, or navigate within AGATA, explain the workflow clearly and give a navigation action when a relevant destination exists. "
+                "Use only these internal destinations: Projects=/projects; Contractors=/contractors; Requirements=/requirements; Evidence=/evidence; Readiness=/readiness; Remediation=/remediation; Rumi=/rumi; Insights=/insights; Notifications=/notifications; Team=/team; Settings=/settings; Billing & Plan=/billing; Usage=/usage; Audit Trail=/audit; Command Center=/dashboard. "
+                "For a navigation action, use Markdown link syntax exactly like [Open Projects](/projects). Only use one of the destinations listed above. "
+                "Do not claim that Rumi has performed an action unless the user explicitly asks for an available action and AGATA provides that action. When the user asks how to create something, guide them to the relevant workspace and describe the next steps; do not pretend to create it.\n\n"
+                "GREETING/IDENTITY RULES: If asked who you are, say you are Rumi, AGATA's compliance intelligence assistant. Keep it brief. "
+                "If the answer is not supported by the supplied data, say so instead of guessing. Keep answers concise and practical.\n\n"
+                + context + "\n\n" + conversation_history
+            ),
+        }
+        messages = [system, *[{"role": item.role, "content": item.content} for item in history]]
 
     async def body() -> AsyncIterator[str]:
         chunks: list[str] = []
