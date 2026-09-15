@@ -46,6 +46,7 @@ def test_production_accepts_explicit_external_services() -> None:
         database_url="postgresql+psycopg://agata:secret@db.example.com:5432/agata",
         cors_origins="https://app.example.com,https://www.example.com",
         ollama_base_url="https://rumi.example.com",
+        paystack_secret_key="sk_test_explicit-production-test-value",
     )
 
     assert settings.cors_origin_list == ["https://app.example.com", "https://www.example.com"]
