@@ -222,6 +222,35 @@ def _is_historical_trace_request(message: dict[str, str] | None) -> bool:
     return "historical trace" in content and "readiness decision" in content
 
 
+def _is_lightweight_request(message: dict[str, str] | None) -> bool:
+    """Keep casual conversation out of the expensive workspace-intelligence path."""
+    if not message or message.get("role") != "user":
+        return False
+    content = " ".join(message.get("content", "").lower().split())
+    if not content or _is_historical_trace_request(message):
+        return False
+
+    exact_casual = {
+        "hi", "hello", "hey", "hey rumi", "hi rumi", "hello rumi", "yo", "sup",
+        "hiya", "good morning", "good afternoon", "good evening", "good night",
+        "thanks", "thank you", "thx", "ok", "okay", "alright", "cool", "nice",
+        "so", "and?", "what's up", "whats up", "how are you", "how are you doing",
+        "are you there", "you there", "test", "ping",
+    }
+    if content in exact_casual:
+        return True
+
+    if len(content) <= 80:
+        business_terms = (
+            "project", "contractor", "requirement", "evidence", "readiness", "ready", "blocker",
+            "document", "compliance", "decision", "replay", "history", "conversation", "chat",
+            "audit", "billing", "usage", "notification", "team", "setting", "insight", "remediation",
+            "upload", "assign", "create", "manage", "find", "review", "status", "score", "risk",
+        )
+        return not any(term in content for term in business_terms)
+    return False
+
+
 def _historical_system() -> dict[str, str]:
     return {
         "role": "system",
@@ -236,6 +265,19 @@ def _historical_system() -> dict[str, str]:
             "You may explain the operational significance of the supplied blocker/change-action counts, but do not invent a cause. "
             "Preserve the deterministic result exactly: Not Ready, 0%, with 2 of 2 requirements blocking readiness. "
             "If a fact is not in the trace, say it is not established by the trace. Keep the explanation concise and decision-focused."
+        ),
+    }
+
+
+def _lightweight_system() -> dict[str, str]:
+    return {
+        "role": "system",
+        "content": (
+            "You are Rumi, AGATA's compliance intelligence assistant. "
+            "This is a casual conversation turn, so do not load, request, or infer AGATA workspace data. "
+            "Respond naturally, briefly, and conversationally. Do not turn a greeting or short casual message into a compliance explanation. "
+            "If the user asks a business/workspace question, answer it only when the supplied conversation contains enough facts; otherwise say what you need. "
+            "If the user asks who you are, say you are Rumi, AGATA's compliance intelligence assistant."
         ),
     }
 
@@ -305,11 +347,15 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
         db.commit()
 
     historical = _is_historical_trace_request(last_user)
-    history = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc())).all()
+    lightweight = _is_lightweight_request(last_user)
 
     if historical:
         messages = [_historical_system(), last_user]
+    elif lightweight:
+        recent = incoming[-6:]
+        messages = [_lightweight_system(), *recent]
     else:
+        history = db.scalars(select(RumiMessageRecord).where(RumiMessageRecord.conversation_id == conversation.id).order_by(RumiMessageRecord.created_at.asc()).limit(20)).all()
         context = _workspace_context(db, user.company_id)
         conversation_history = _conversation_history_context(db, user, conversation.id)
         system = {
