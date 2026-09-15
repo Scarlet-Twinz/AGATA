@@ -9,7 +9,15 @@ class EmailDeliveryError(RuntimeError):
     pass
 
 
-async def send_email(*, to: str, subject: str, html: str, text: str, category: str) -> None:
+async def send_email(
+    *,
+    to: str,
+    subject: str,
+    html: str,
+    text: str,
+    category: str,
+    reply_to: str | None = None,
+) -> None:
     settings = get_settings()
     if not settings.resend_api_key:
         if settings.app_env == "development":
@@ -25,6 +33,9 @@ async def send_email(*, to: str, subject: str, html: str, text: str, category: s
         "text": text,
         "tags": [{"name": "category", "value": category}],
     }
+    if reply_to:
+        payload["reply_to"] = [reply_to]
+
     headers = {"Authorization": f"Bearer {settings.resend_api_key}", "Content-Type": "application/json"}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
