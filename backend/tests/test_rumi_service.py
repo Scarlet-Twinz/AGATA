@@ -72,7 +72,7 @@ def test_historical_timeout_raises_without_retrying_with_live_context(monkeypatc
         asyncio.run(collect(rumi.stream_rumi(messages)))
 
     assert len(calls) == 1
-    assert "Current workspace context" not in calls[0][0]["content"] or calls[0][0]["content"] == "Current workspace context"
+    assert calls[0][1] == messages[1]
 
 
 def test_non_historical_timeout_raises_without_retry(monkeypatch):
