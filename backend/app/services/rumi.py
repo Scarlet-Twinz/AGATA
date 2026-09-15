@@ -39,6 +39,34 @@ def _is_historical_trace(messages: list[dict[str, str]]) -> bool:
     return "rumi_mode: historical_trace" in content or ("historical trace" in content and "readiness decision" in content)
 
 
+def _is_memory_mode(messages: list[dict[str, str]]) -> bool:
+    return any(
+        message.get("role") == "system" and "CONVERSATION MEMORY MODE" in message.get("content", "")
+        for message in messages
+    )
+
+
+def _declared_name(content: str) -> str | None:
+    match = re.search(
+        r"\bmy name is\s+([A-Za-z][A-Za-z' -]*?)(?=\s*(?:,|\.|!|\?|\band\b\s+what\b|\bwhat(?:'s|s)?\b)|$)",
+        content,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else None
+
+
+def _is_name_question(content: str) -> bool:
+    normalized = " ".join(content.lower().split())
+    return bool(re.search(r"\bwhat(?:'s| is|s)?\s+my name\b", normalized))
+
+
+def _remove_name_question(content: str, name: str) -> str:
+    remaining = re.sub(rf"\bmy name is\s+{re.escape(name)}\s*,?\s*", "", content, count=1, flags=re.IGNORECASE)
+    remaining = re.sub(r"\bwhat(?:'s| is|s)?\s+my name\b\s*(?:and\s*)?", "", remaining, count=1, flags=re.IGNORECASE)
+    remaining = re.sub(r"^[\s,.:;-]+|[\s,.:;-]+$", "", remaining)
+    return remaining
+
+
 def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     """Give the model only the historical request and strict trace-grounding instructions."""
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
@@ -102,14 +130,12 @@ def _extract_historical_answer(content: str) -> str:
     if requirements is not None:
         count_parts.append(f"{requirements} requirements")
     if evidence is not None:
-        evidence_word = "zero" if evidence == "0" else evidence
-        count_parts.append(f"{evidence_word} evidence records")
+        count_parts.append(f"{'zero' if evidence == '0' else evidence} evidence records")
     if blockers is not None:
         blocker_match = re.fullmatch(r"(\d+)\s*\((.*)\)", blockers)
         count_parts.append(f"{blocker_match.group(1) if blocker_match else blockers} blockers")
     if changes is not None:
-        change_word = "zero" if changes == "0" else changes
-        count_parts.append(f"{change_word} change actions")
+        count_parts.append(f"{'zero' if changes == '0' else changes} change actions")
     if count_parts:
         if len(count_parts) == 1:
             parts.append(f"The trace captured {count_parts[0]}.")
@@ -155,8 +181,23 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
             yield _extract_historical_answer(last_user.get("content", ""))
         return
 
+    model_messages = messages
+    memory_name = None
+    last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+    if _is_memory_mode(messages) and last_user is not None:
+        memory_name = _declared_name(last_user.get("content", ""))
+        if memory_name and _is_name_question(last_user.get("content", "")):
+            yield f"Your name is {memory_name}."
+            remaining = _remove_name_question(last_user.get("content", ""), memory_name)
+            if not remaining:
+                return
+            model_messages = [
+                ({**message, "content": remaining} if message is last_user else message)
+                for message in messages
+            ]
+
     try:
-        async for token in _stream(messages, url, settings.ollama_model, timeout_seconds):
+        async for token in _stream(model_messages, url, settings.ollama_model, timeout_seconds):
             yield token
     except httpx.ReadTimeout as exc:
         raise RumiUnavailableError("Rumi is temporarily unavailable: ReadTimeout.") from exc
