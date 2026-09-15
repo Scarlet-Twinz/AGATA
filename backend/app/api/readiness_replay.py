@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.entities import ProjectContractor, User
+from app.models.entities import Contractor, Project, ProjectContractor, User
 from app.models.readiness_trace import ReadinessTrace
 from app.services.rbac import require_permission
 from app.services.readiness_intelligence import build_readiness_intelligence
@@ -37,9 +37,14 @@ def readiness_replay(
     user: User = Depends(require_permission("readiness.view")),
 ):
     assignment = db.scalar(
-        select(ProjectContractor).where(
+        select(ProjectContractor)
+        .join(Project, Project.id == ProjectContractor.project_id)
+        .join(Contractor, Contractor.id == ProjectContractor.contractor_id)
+        .where(
             ProjectContractor.project_id == project_id,
             ProjectContractor.contractor_id == contractor_id,
+            Project.company_id == user.company_id,
+            Contractor.company_id == user.company_id,
         )
     )
     if assignment is None:
