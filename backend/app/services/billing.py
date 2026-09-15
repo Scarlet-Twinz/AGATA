@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 
@@ -80,6 +81,19 @@ class PaystackAdapter(BillingAdapter):
             raise BillingProviderError(payload.get("message", "Paystack checkout failed"))
         result = payload.get("data", {})
         return CheckoutResult(authorization_url=result["authorization_url"], provider_reference=result.get("reference"), provider_customer_id=result.get("customer_code"))
+
+    async def verify_transaction(self, reference: str) -> dict:
+        if not self.settings.paystack_secret_key:
+            raise BillingProviderError("Paystack is not configured")
+        encoded_reference = quote(reference, safe="")
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(f"https://api.paystack.co/transaction/verify/{encoded_reference}", headers={"Authorization": f"Bearer {self.settings.paystack_secret_key}"})
+        if response.is_error:
+            raise BillingProviderError(f"Paystack verification failed: {response.text[:300]}")
+        payload = response.json()
+        if not payload.get("status"):
+            raise BillingProviderError(payload.get("message", "Paystack verification failed"))
+        return payload.get("data", {})
 
     def verify_webhook(self, *, body: bytes, headers: dict[str, str]) -> bool:
         secret, signature = self.settings.paystack_secret_key, headers.get("x-paystack-signature", "")
