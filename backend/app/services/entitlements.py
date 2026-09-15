@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.billing import BillingPlan, BillingSubscription, SubscriptionStatus
-from app.models.entities import Company, Contractor, Project, Requirement, User
+from app.models.entities import Contractor, Document, Project, User
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,10 @@ def _active_plan(db: Session, company_id: UUID) -> BillingPlan:
         plan = db.get(BillingPlan, subscription.plan_id)
         if plan:
             return plan
-    return db.scalar(select(BillingPlan).where(BillingPlan.code == "foundation"))
+    plan = db.scalar(select(BillingPlan).where(BillingPlan.code == "foundation"))
+    if plan is None:
+        raise RuntimeError("AGATA Foundation billing plan is not configured")
+    return plan
 
 
 def workspace_entitlements(db: Session, company_id: UUID) -> dict:
@@ -50,10 +53,8 @@ def workspace_entitlements(db: Session, company_id: UUID) -> dict:
         "users": db.scalar(select(func.count(User.id)).where(User.company_id == company_id)) or 0,
         "projects": db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id)) or 0,
         "contractors": db.scalar(select(func.count(Contractor.id)).where(Contractor.company_id == company_id)) or 0,
-        "evidence": 0,
+        "evidence": db.scalar(select(func.count(Document.id)).where(Document.company_id == company_id)) or 0,
     }
-    # Evidence can be stored against several workflow entities; keep this value
-    # optional until the evidence model is loaded by the caller.
     return {
         "plan": {"code": plan.code, "name": plan.name, "interval": plan.interval},
         "limits": {"users": limits.users, "projects": limits.projects, "contractors": limits.contractors, "evidence": limits.evidence},
