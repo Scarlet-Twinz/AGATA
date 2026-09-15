@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS billing_webhook_events (
 );
 CREATE INDEX IF NOT EXISTS ix_billing_webhook_events_provider ON billing_webhook_events(provider);
 
+-- AGATA launch pricing. Provider-specific recurring-plan IDs are intentionally
+-- left NULL until the corresponding provider test/live plans are created.
 INSERT INTO billing_plans (id, code, name, description, currency, amount_minor, interval, active)
-SELECT '00000000-0000-0000-0000-000000000001', 'foundation', 'AGATA Foundation', 'Core AGATA workspace capabilities. Pricing is configured before paid launch.', 'USD', 0, 'monthly', TRUE
-WHERE NOT EXISTS (SELECT 1 FROM billing_plans WHERE code = 'foundation');
+VALUES
+    ('00000000-0000-0000-0000-000000000001', 'foundation', 'AGATA Foundation', 'Free workspace for getting started with compliance readiness, core evidence tracking, deterministic readiness, Rumi guidance, and audit history.', 'USD', 0, 'monthly', TRUE),
+    ('00000000-0000-0000-0000-000000000002', 'professional', 'AGATA Professional', 'For growing contractor and project teams: full readiness intelligence, Decision Lens, Decision Impact, History, Replay, Rumi, notifications, remediation, audit trail, and operational reporting.', 'USD', 2900, 'monthly', TRUE),
+    ('00000000-0000-0000-0000-000000000003', 'business', 'AGATA Business', 'For larger teams: expanded workspace capacity, advanced decision intelligence, team controls, analytics, reporting, and API-ready operations.', 'USD', 7900, 'monthly', TRUE)
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    currency = EXCLUDED.currency,
+    amount_minor = EXCLUDED.amount_minor,
+    interval = EXCLUDED.interval,
+    active = EXCLUDED.active;
