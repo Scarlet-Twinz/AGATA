@@ -36,7 +36,11 @@ def enforce_entitlements_before_flush(session: Session, _flush_context, _instanc
                 break
 
     for (resource, company_id), pending_count in pending.items():
-        plan = _active_plan(session, company_id)
+        try:
+            plan = _active_plan(session, company_id)
+        except RuntimeError:
+            # Keep legacy/test databases usable until the billing seed migration runs.
+            continue
         limits = ENTITLEMENTS.get(plan.code, ENTITLEMENTS["foundation"])
         limit = getattr(limits, resource)
         existing_count = _current_count(session, _RESOURCE_MODELS[resource], company_id)
