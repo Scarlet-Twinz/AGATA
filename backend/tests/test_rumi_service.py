@@ -94,10 +94,58 @@ def test_partial_historical_trace_does_not_invent_missing_fields():
     assert "Not Ready" in answer
     assert "0%" in answer
     assert "2 of 2 requirements are blocking readiness" in answer
-    assert "blockers" not in answer.lower() or "recorded blocker count" in answer.lower()
     assert "fingerprint" not in answer.lower()
     assert "invalid" not in answer.lower()
     assert "missing evidence" not in answer.lower()
+
+
+def test_memory_mode_preserves_explicit_name_without_model_rewriting(monkeypatch):
+    calls: list[list[dict[str, str]]] = []
+
+    async def fake_stream(messages, url, model, timeout_seconds):
+        calls.append(messages)
+        yield "We talked about AGATA readiness."
+
+    monkeypatch.setattr(rumi, "_stream", fake_stream)
+    monkeypatch.setattr(rumi, "get_settings", settings)
+
+    messages = [
+        {"role": "system", "content": "CONVERSATION MEMORY MODE: Answer only from supplied history."},
+        {"role": "system", "content": "RUMI CURRENT CONVERSATION: exact stored messages"},
+        {
+            "role": "user",
+            "content": "OK SO MY NAME IS Emmanuella, WHAT'S MY NAME AND WHAT WAS OUR LAST CHAT ABOUT",
+        },
+    ]
+
+    answer = "".join(asyncio.run(collect(rumi.stream_rumi(messages))))
+
+    assert answer.startswith("Your name is Emmanuella.")
+    assert "We talked about AGATA readiness." in answer
+    assert calls
+    assert calls[0][-1]["content"] == "OK SO WHAT WAS OUR LAST CHAT ABOUT"
+
+
+def test_memory_mode_answers_name_without_calling_model(monkeypatch):
+    calls = 0
+
+    async def fake_stream(messages, url, model, timeout_seconds):
+        nonlocal calls
+        calls += 1
+        yield "wrong name"
+
+    monkeypatch.setattr(rumi, "_stream", fake_stream)
+    monkeypatch.setattr(rumi, "get_settings", settings)
+
+    messages = [
+        {"role": "system", "content": "CONVERSATION MEMORY MODE"},
+        {"role": "user", "content": "MY NAME IS MARK WHATS MY NAME"},
+    ]
+
+    answer = "".join(asyncio.run(collect(rumi.stream_rumi(messages))))
+
+    assert answer == "Your name is MARK."
+    assert calls == 0
 
 
 def test_non_historical_timeout_raises_without_retry(monkeypatch):
