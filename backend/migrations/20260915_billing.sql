@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS billing_plans (
     currency VARCHAR(8) NOT NULL DEFAULT 'USD',
     amount_minor INTEGER NOT NULL DEFAULT 0,
     interval VARCHAR(20) NOT NULL DEFAULT 'monthly',
+    stripe_price_id VARCHAR(255),
+    paystack_plan_code VARCHAR(255),
+    flutterwave_plan_id VARCHAR(255),
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
