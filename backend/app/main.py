@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
+from app.api.billing import router as billing_router
 from app.api.contractor_management import router as contractor_management_router
 from app.api.dashboard_consistency import router as dashboard_consistency_router
 from app.api.evidence_intelligence import router as evidence_intelligence_router
@@ -29,6 +30,7 @@ from app.core.config import get_settings
 from app.db.migrations import run_migrations
 from app.db.session import engine
 from app.models import auth_security  # noqa: F401
+from app.models import billing  # noqa: F401
 from app.models import entities  # noqa: F401
 from app.models import evidence_intelligence  # noqa: F401
 from app.models import readiness_decision  # noqa: F401
@@ -47,14 +49,10 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(
-    title=settings.app_name,
-    version="0.2.0",
-    lifespan=lifespan,
-    dependencies=[Depends(enforce_request_permission)],
-)
+app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan, dependencies=[Depends(enforce_request_permission)])
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(dashboard_consistency_router)
 app.include_router(evidence_management_router)
 app.include_router(resources_router)
