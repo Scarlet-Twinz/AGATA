@@ -2,12 +2,21 @@ import asyncio
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
 from app.services import rumi
 
 
 async def collect(stream):
     return [chunk async for chunk in stream]
+
+
+def settings():
+    return SimpleNamespace(
+        ollama_base_url="http://127.0.0.1:11434",
+        ollama_model="qwen2.5:3b-instruct",
+        ollama_timeout_seconds=120,
+    )
 
 
 def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
@@ -18,15 +27,7 @@ def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
         yield "historical answer"
 
     monkeypatch.setattr(rumi, "_stream", fake_stream)
-    monkeypatch.setattr(
-        rumi,
-        "get_settings",
-        lambda: SimpleNamespace(
-            ollama_base_url="http://127.0.0.1:11434",
-            ollama_model="qwen2.5:3b-instruct",
-            ollama_timeout_seconds=120,
-        ),
-    )
+    monkeypatch.setattr(rumi, "get_settings", settings)
 
     messages = [
         {
@@ -51,7 +52,7 @@ def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
     assert calls[0][1] == messages[-1]
 
 
-def test_historical_timeout_does_not_retry_with_live_context(monkeypatch):
+def test_historical_timeout_raises_without_retrying_with_live_context(monkeypatch):
     calls: list[list[dict[str, str]]] = []
 
     async def fake_stream(messages, url, model, timeout_seconds):
@@ -60,29 +61,21 @@ def test_historical_timeout_does_not_retry_with_live_context(monkeypatch):
         yield "unreachable"
 
     monkeypatch.setattr(rumi, "_stream", fake_stream)
-    monkeypatch.setattr(
-        rumi,
-        "get_settings",
-        lambda: SimpleNamespace(
-            ollama_base_url="http://127.0.0.1:11434",
-            ollama_model="qwen2.5:3b-instruct",
-            ollama_timeout_seconds=120,
-        ),
-    )
+    monkeypatch.setattr(rumi, "get_settings", settings)
 
     messages = [
         {"role": "system", "content": "Current workspace context"},
         {"role": "user", "content": "Explain this historical trace. Status: Not Ready."},
     ]
 
-    chunks = asyncio.run(collect(rumi.stream_rumi(messages)))
+    with pytest.raises(rumi.RumiUnavailableError, match="ReadTimeout"):
+        asyncio.run(collect(rumi.stream_rumi(messages)))
 
-    assert chunks == ["Rumi is temporarily unavailable: ReadTimeout."]
     assert len(calls) == 1
-    assert calls[0] == messages
+    assert "Current workspace context" not in calls[0][0]["content"] or calls[0][0]["content"] == "Current workspace context"
 
 
-def test_non_historical_timeout_does_not_retry_with_unrelated_context(monkeypatch):
+def test_non_historical_timeout_raises_without_retry(monkeypatch):
     calls = 0
 
     async def fake_stream(messages, url, model, timeout_seconds):
@@ -92,22 +85,14 @@ def test_non_historical_timeout_does_not_retry_with_unrelated_context(monkeypatc
         yield "unreachable"
 
     monkeypatch.setattr(rumi, "_stream", fake_stream)
-    monkeypatch.setattr(
-        rumi,
-        "get_settings",
-        lambda: SimpleNamespace(
-            ollama_base_url="http://127.0.0.1:11434",
-            ollama_model="qwen2.5:3b-instruct",
-            ollama_timeout_seconds=120,
-        ),
-    )
+    monkeypatch.setattr(rumi, "get_settings", settings)
 
     messages = [
         {"role": "system", "content": "Current workspace context"},
         {"role": "user", "content": "What projects do I have?"},
     ]
 
-    chunks = asyncio.run(collect(rumi.stream_rumi(messages)))
+    with pytest.raises(rumi.RumiUnavailableError, match="ReadTimeout"):
+        asyncio.run(collect(rumi.stream_rumi(messages)))
 
-    assert chunks == ["Rumi is temporarily unavailable: ReadTimeout."]
     assert calls == 1
