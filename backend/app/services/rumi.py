@@ -6,6 +6,10 @@ import httpx
 from app.core.config import get_settings
 
 
+class RumiUnavailableError(RuntimeError):
+    """Raised when the local Rumi model cannot produce an answer."""
+
+
 async def _stream(messages: list[dict[str, str]], url: str, model: str, timeout_seconds: int) -> AsyncIterator[str]:
     timeout = httpx.Timeout(timeout_seconds, connect=10.0, read=timeout_seconds, write=timeout_seconds, pool=10.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -69,7 +73,7 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     try:
         async for token in _stream(request_messages, url, settings.ollama_model, timeout_seconds):
             yield token
-    except httpx.ReadTimeout:
-        yield "Rumi is temporarily unavailable: ReadTimeout."
+    except httpx.ReadTimeout as exc:
+        raise RumiUnavailableError("Rumi is temporarily unavailable: ReadTimeout.") from exc
     except httpx.HTTPError as exc:
-        yield f"Rumi is temporarily unavailable: {exc.__class__.__name__}."
+        raise RumiUnavailableError(f"Rumi is temporarily unavailable: {exc.__class__.__name__}.") from exc
