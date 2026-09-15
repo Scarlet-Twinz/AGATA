@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     resend_api_key: str = ""
     email_from: str = "AGATA <onboarding@resend.dev>"
-    support_email: str = "anthonyemmanuella297@gmail.com"
+    support_email: str = Field(
+        default="anthonyemmanuella297@gmail.com",
+        validation_alias=AliasChoices("SUPPORT_EMAIL", "AGATA_SUPPORT_EMAIL"),
+    )
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:3b-instruct"
     ollama_timeout_seconds: int = 120
