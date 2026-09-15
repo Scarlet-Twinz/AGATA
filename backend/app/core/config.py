@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: int = 120
     auth_verification_expire_minutes: int = 30
     auth_reset_expire_minutes: int = 30
+    billing_default_provider: str = "paystack"
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    paystack_secret_key: str = ""
+    flutterwave_secret_key: str = ""
+    flutterwave_webhook_secret_hash: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -28,6 +34,9 @@ class Settings(BaseSettings):
             raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be greater than zero")
         if self.ollama_timeout_seconds <= 0:
             raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero")
+
+        if self.billing_default_provider not in {"stripe", "paystack", "flutterwave"}:
+            raise ValueError("BILLING_DEFAULT_PROVIDER must be stripe, paystack, or flutterwave")
 
         if self.app_env.lower() == "production":
             if self.secret_key in {"change-me", "", "replace-with-a-long-random-development-secret"}:
@@ -40,6 +49,12 @@ class Settings(BaseSettings):
                 raise ValueError("DATABASE_URL must point to a non-local database in production")
             if self.ollama_base_url.startswith(("http://127.0.0.1", "http://localhost")):
                 raise ValueError("OLLAMA_BASE_URL must point to a reachable production Rumi service")
+            if self.billing_default_provider == "paystack" and not self.paystack_secret_key:
+                raise ValueError("PAYSTACK_SECRET_KEY must be configured in production")
+            if self.billing_default_provider == "stripe" and not self.stripe_secret_key:
+                raise ValueError("STRIPE_SECRET_KEY must be configured in production")
+            if self.billing_default_provider == "flutterwave" and not self.flutterwave_secret_key:
+                raise ValueError("FLUTTERWAVE_SECRET_KEY must be configured in production")
 
         return self
 
