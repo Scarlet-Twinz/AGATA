@@ -218,8 +218,36 @@ def _conversation_history_context(db: Session, user: User, current_id: UUID) -> 
 def _is_historical_trace_request(message: dict[str, str] | None) -> bool:
     if not message or message.get("role") != "user":
         return False
-    content = message.get("content", "").lower()
-    return "historical trace" in content and "readiness decision" in content
+    content = " ".join(message.get("content", "").lower().split())
+    return (
+        "rumi_mode: historical_trace" in content
+        or ("historical trace" in content and "readiness decision" in content)
+    )
+
+
+def _is_conversation_memory_request(message: dict[str, str] | None) -> bool:
+    if not message or message.get("role") != "user":
+        return False
+    content = " ".join(message.get("content", "").lower().split())
+    memory_phrases = (
+        "what was our last chat",
+        "what was our last conversation",
+        "what did we talk about",
+        "what did we discuss",
+        "what did i ask earlier",
+        "what did i ask before",
+        "what did i say earlier",
+        "what did i say before",
+        "previous conversation",
+        "previous chat",
+        "last conversation",
+        "last chat",
+        "earlier conversation",
+        "earlier chat",
+        "our previous",
+        "remember when",
+    )
+    return any(phrase in content for phrase in memory_phrases)
 
 
 def _is_lightweight_request(message: dict[str, str] | None) -> bool:
@@ -227,7 +255,7 @@ def _is_lightweight_request(message: dict[str, str] | None) -> bool:
     if not message or message.get("role") != "user":
         return False
     content = " ".join(message.get("content", "").lower().split())
-    if not content or _is_historical_trace_request(message):
+    if not content or _is_historical_trace_request(message) or _is_conversation_memory_request(message):
         return False
 
     exact_casual = {
@@ -269,6 +297,39 @@ def _historical_system() -> dict[str, str]:
     }
 
 
+def _conversation_memory_system() -> dict[str, str]:
+    return {
+        "role": "system",
+        "content": (
+            "You are Rumi, AGATA's compliance intelligence assistant.\n\n"
+            "CONVERSATION MEMORY MODE: Answer only from the supplied RUMI conversation history and the user's current message. "
+            "This history is user-scoped and is authoritative for what the user previously said in Rumi. "
+            "Preserve names, project names, dates, and wording exactly when the history supplies them. Never invent a previous topic, name, date, or event. "
+            "Do not use current workspace readiness, evidence, contractor, or project data to answer a memory question. "
+            "If the supplied history does not establish the requested detail, say that it is not available in the conversation history. "
+            "If the user gives a name in the current message, preserve that exact spelling. Keep the answer direct and natural."
+        ),
+    }
+
+
+def _conversation_memory_context(db: Session, user: User, current_id: UUID) -> str:
+    """Provide exact recent messages plus a compact index for memory questions."""
+    current_messages = db.scalars(
+        select(RumiMessageRecord)
+        .where(RumiMessageRecord.conversation_id == current_id)
+        .order_by(RumiMessageRecord.created_at.desc())
+        .limit(24)
+    ).all()
+    lines = ["RUMI CURRENT CONVERSATION (newest first; exact stored messages):"]
+    if current_messages:
+        for message in reversed(current_messages):
+            lines.append(f"- {message.role}: {message.content[:1000]}")
+    else:
+        lines.append("- No stored messages in the current conversation.")
+    lines.extend(["", _conversation_history_context(db, user, current_id)])
+    return "\n".join(lines)
+
+
 def _lightweight_system() -> dict[str, str]:
     return {
         "role": "system",
@@ -277,7 +338,8 @@ def _lightweight_system() -> dict[str, str]:
             "This is a casual conversation turn, so do not load, request, or infer AGATA workspace data. "
             "Respond naturally, briefly, and conversationally. Do not turn a greeting or short casual message into a compliance explanation. "
             "If the user asks a business/workspace question, answer it only when the supplied conversation contains enough facts; otherwise say what you need. "
-            "If the user asks who you are, say you are Rumi, AGATA's compliance intelligence assistant."
+            "If the user asks who you are, say you are Rumi, AGATA's compliance intelligence assistant. "
+            "If the user asks who owns or created AGATA and no authoritative ownership fact is supplied, say that ownership is not established in the available Rumi data; never claim that you have no owner."
         ),
     }
 
@@ -347,10 +409,14 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
         db.commit()
 
     historical = _is_historical_trace_request(last_user)
+    memory = _is_conversation_memory_request(last_user)
     lightweight = _is_lightweight_request(last_user)
 
     if historical:
         messages = [_historical_system(), last_user]
+    elif memory:
+        memory_context = _conversation_memory_context(db, user, conversation.id)
+        messages = [_conversation_memory_system(), {"role": "system", "content": memory_context}, last_user]
     elif lightweight:
         recent = incoming[-6:]
         messages = [_lightweight_system(), *recent]
@@ -379,6 +445,7 @@ async def chat(payload: RumiRequest, db: Session = Depends(get_db), user: User =
                 "For a navigation action, use Markdown link syntax exactly like [Open Projects](/projects). Only use one of the destinations listed above. "
                 "Do not claim that Rumi has performed an action unless the user explicitly asks for an available action and AGATA provides that action. When the user asks how to create something, guide them to the relevant workspace and describe the next steps; do not pretend to create it.\n\n"
                 "GREETING/IDENTITY RULES: If asked who you are, say you are Rumi, AGATA's compliance intelligence assistant. Keep it brief. "
+                "If asked who owns or created AGATA and no authoritative ownership fact is supplied, say that ownership is not established in the available Rumi data; never claim that you have no owner. "
                 "If the answer is not supported by the supplied data, say so instead of guessing. Keep answers concise and practical.\n\n"
                 + context + "\n\n" + conversation_history
             ),
