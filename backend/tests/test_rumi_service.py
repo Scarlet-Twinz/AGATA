@@ -20,11 +20,12 @@ def settings():
 
 
 def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
-    calls: list[list[dict[str, str]]] = []
+    calls = 0
 
     async def fake_stream(messages, url, model, timeout_seconds):
-        calls.append(messages)
-        yield "historical answer"
+        nonlocal calls
+        calls += 1
+        yield "unsafe model answer"
 
     monkeypatch.setattr(rumi, "_stream", fake_stream)
     monkeypatch.setattr(rumi, "get_settings", settings)
@@ -43,13 +44,40 @@ def test_historical_trace_is_compacted_before_first_ollama_call(monkeypatch):
 
     chunks = asyncio.run(collect(rumi.stream_rumi(messages)))
 
-    assert chunks == ["historical answer"]
-    assert len(calls) == 1
-    assert len(calls[0]) == 2
-    assert calls[0][0]["role"] == "system"
-    assert "CURRENT AGATA WORKSPACE DATA" not in calls[0][0]["content"]
-    assert "HISTORICAL TRACE MODE" in calls[0][0]["content"]
-    assert calls[0][1] == messages[-1]
+    assert calls == 0
+    assert "Not Ready" in "".join(chunks)
+
+
+def test_explicit_historical_mode_is_deterministic_and_never_calls_ollama(monkeypatch):
+    calls = 0
+
+    async def fake_stream(messages, url, model, timeout_seconds):
+        nonlocal calls
+        calls += 1
+        yield "unsafe model answer"
+
+    monkeypatch.setattr(rumi, "_stream", fake_stream)
+    monkeypatch.setattr(rumi, "get_settings", settings)
+
+    trace = (
+        "RUMI_MODE: HISTORICAL_TRACE Explain this AGATA readiness decision trace. "
+        "Captured at: 9/14/2026, 7:57:43 AM. Engine: readiness-v2. Status: Not Ready. "
+        "Score: 0%. Deterministic explanation: 2 of 2 requirements are blocking readiness. "
+        "Requirements captured: 2. Evidence records captured: 0. Blockers captured: 2 (NNNNNNNNNNNN, BB). "
+        "Change actions captured: 0. Decision fingerprint: f079df44d54c62c492bfe5ea011e28e2f40211662d685160118a31e0c51234ee."
+    )
+
+    answer = "".join(asyncio.run(collect(rumi.stream_rumi([{"role": "user", "content": trace}]))))
+
+    assert calls == 0
+    assert "Not Ready" in answer
+    assert "0%" in answer
+    assert "2 of 2 requirements are blocking readiness" in answer
+    assert "NNNNNNNNNNNN, BB" in answer
+    assert "zero evidence" in answer.lower()
+    assert "suggests" not in answer.lower()
+    assert "gather" not in answer.lower()
+    assert "initiate" not in answer.lower()
 
 
 def test_historical_timeout_raises_without_retrying_with_live_context(monkeypatch):
