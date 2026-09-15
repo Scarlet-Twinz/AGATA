@@ -20,8 +20,11 @@ def _names(items: list | None, key: str = "requirement_name") -> list[str]:
 
 
 def _trace_blocker_transition(trace: ReadinessTrace, previous: ReadinessTrace | None) -> tuple[list[str], list[str]]:
+    """Return blocker changes only when a real prior snapshot exists."""
+    if previous is None:
+        return [], []
     current_blockers = set(_names(trace.blockers_snapshot))
-    previous_blockers = set(_names(previous.blockers_snapshot if previous else None))
+    previous_blockers = set(_names(previous.blockers_snapshot))
     return sorted(current_blockers - previous_blockers), sorted(previous_blockers - current_blockers)
 
 
