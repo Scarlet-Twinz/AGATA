@@ -170,6 +170,39 @@ def test_memory_mode_answers_name_without_calling_model(monkeypatch):
     assert calls == 0
 
 
+def test_memory_mode_answers_last_chat_from_exact_prior_message_without_model(monkeypatch):
+    calls = 0
+
+    async def fake_stream(messages, url, model, timeout_seconds):
+        nonlocal calls
+        calls += 1
+        yield "hallucinated summary"
+
+    monkeypatch.setattr(rumi, "_stream", fake_stream)
+    monkeypatch.setattr(rumi, "get_settings", settings)
+
+    messages = [
+        {"role": "system", "content": "CONVERSATION MEMORY MODE"},
+        {
+            "role": "system",
+            "content": (
+                "RUMI CURRENT CONVERSATION (newest first; exact stored messages):\n"
+                "- user: HI WHAT UP\n"
+                "- assistant: I am Rumi.\n"
+                "- user: WHO IS UR OWNER\n"
+                "- assistant: AGATA's ownership is not established.\n"
+                "- user: WHAT WAS OUR LAST CHAT ABOUT"
+            ),
+        },
+        {"role": "user", "content": "WHAT WAS OUR LAST CHAT ABOUT"},
+    ]
+
+    answer = "".join(asyncio.run(collect(rumi.stream_rumi(messages))))
+
+    assert answer == 'Your last Rumi chat was about: "WHO IS UR OWNER".'
+    assert calls == 0
+
+
 def test_non_historical_timeout_raises_without_retry(monkeypatch):
     calls = 0
 
