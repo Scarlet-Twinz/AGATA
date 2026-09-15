@@ -1,0 +1,27 @@
+/* Keep provider configuration details out of the customer-facing workspace shell. */
+.agata-plan strong {
+  font-size: 0 !important;
+  line-height: 1.2;
+}
+
+.agata-plan strong::after {
+  content: attr(data-plan-name);
+  font-size: 10px;
+}
+
+.agata-plan a {
+  font-size: 0;
+}
+
+.agata-plan a::after {
+  content: "View billing →";
+  font-size: 10px;
+}
+
+body[data-agata-plan-name] .agata-plan strong::after {
+  content: attr(data-agata-plan-name);
+}
+
+body[data-agata-plan-code="foundation"] .agata-plan strong::after {
+  content: "AGATA Foundation · Free";
+}
