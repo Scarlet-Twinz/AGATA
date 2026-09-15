@@ -7,7 +7,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.billing import BillingPlan, BillingSubscription, SubscriptionStatus
-from app.models.entities import Contractor, Document, Project, User
+from app.models.entities import Contractor, Document, Project
+from app.models.workspace import WorkspaceMembership
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,12 @@ def workspace_entitlements(db: Session, company_id: UUID) -> dict:
     plan = _active_plan(db, company_id)
     limits = ENTITLEMENTS.get(plan.code, ENTITLEMENTS["foundation"])
     counts = {
-        "users": db.scalar(select(func.count(User.id)).where(User.company_id == company_id)) or 0,
+        "users": db.scalar(
+            select(func.count(WorkspaceMembership.id)).where(
+                WorkspaceMembership.company_id == company_id,
+                WorkspaceMembership.status == "active",
+            )
+        ) or 0,
         "projects": db.scalar(select(func.count(Project.id)).where(Project.company_id == company_id)) or 0,
         "contractors": db.scalar(select(func.count(Contractor.id)).where(Contractor.company_id == company_id)) or 0,
         "evidence": db.scalar(select(func.count(Document.id)).where(Document.company_id == company_id)) or 0,
