@@ -39,7 +39,7 @@ export function ContactPage() {
         <h1>Let's make compliance easier.</h1>
         <p>Have a question, need help understanding AGATA, or want to talk about bringing it to your team? Reach out directly or send a message.</p>
         <div className="contact-direct">
-          <a href="mailto:anthony@anthonytech.ng"><span>Email</span><strong>anthony@anthonytech.ng</strong></a>
+          <a href="mailto:anthonyemmanuella297@gmail.com"><span>Email</span><strong>anthonyemmanuella297@gmail.com</strong></a>
           <a href="tel:09031530359"><span>Phone</span><strong>09031530359</strong></a>
         </div>
         <div className="support-cards">
@@ -57,7 +57,7 @@ export function ContactPage() {
           {submitted && <div role="status">Message sent ✓ We’ll get back to you.</div>}
           {error && <div role="alert">{error}</div>}
           <button className="primary-button" type="submit" disabled={sending}>{sending ? "Sending…" : "Send message →"}</button>
-          <small>Your message is sent through AGATA's support API. If delivery is unavailable, you can email <a href="mailto:anthony@anthonytech.ng">anthony@anthonytech.ng</a> directly.</small>
+          <small>Your message is sent through AGATA's support API. If delivery is unavailable, you can email <a href="mailto:anthonyemmanuella297@gmail.com">anthonyemmanuella297@gmail.com</a> directly.</small>
         </form>
       </div>
     </section>
