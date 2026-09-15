@@ -13,7 +13,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.billing import BillingCustomer, BillingPayment, BillingPlan, BillingProvider, BillingSubscription, BillingWebhookEvent, SubscriptionStatus
 from app.models.entities import User
-from app.services.billing import BillingProviderError, get_adapter, webhook_event_id
+from app.services.billing import BillingProviderError, PaystackAdapter, get_adapter, webhook_event_id
 from app.services.entitlements import workspace_entitlements
 from app.services.rbac import require_permission
 
@@ -112,6 +112,75 @@ async def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db
         db.commit()
 
     return {"provider": provider, "authorization_url": result.authorization_url, "reference": result.provider_reference}
+
+
+@router.get("/paystack/verify/{reference}")
+async def verify_paystack_checkout(reference: str, db: Session = Depends(get_db), user: User = Depends(require_permission("billing.manage"))):
+    """Verify a Paystack checkout server-side after the browser returns from hosted checkout.
+
+    The webhook remains the authoritative asynchronous path in production. This endpoint
+    also makes local/test-mode checkout completion deterministic when localhost cannot
+    receive Paystack webhooks.
+    """
+    try:
+        data = await PaystackAdapter().verify_transaction(reference)
+    except BillingProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if str(data.get("status", "")).lower() != "success":
+        raise HTTPException(status_code=402, detail="Paystack transaction has not completed successfully")
+
+    metadata = data.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    if str(metadata.get("company_id") or "") != str(user.company_id):
+        raise HTTPException(status_code=403, detail="Paystack transaction does not belong to this workspace")
+
+    plan_code = _paystack_plan_code(data, metadata)
+    plan = db.scalar(select(BillingPlan).where(BillingPlan.code == str(plan_code))) if plan_code else None
+    if plan is None or plan.active is not True or not plan.paystack_plan_code:
+        raise HTTPException(status_code=400, detail="Paystack transaction is not mapped to an active AGATA plan")
+
+    provider_plan_code = _paystack_plan_code(data, {})
+    if provider_plan_code and provider_plan_code != plan.paystack_plan_code:
+        raise HTTPException(status_code=400, detail="Paystack plan does not match the selected AGATA plan")
+
+    provider_customer_id = _provider_customer_id(data)
+    provider_subscription_id = _provider_subscription_id(data, BillingProvider.PAYSTACK)
+
+    if provider_customer_id:
+        customer = db.scalar(select(BillingCustomer).where(BillingCustomer.company_id == user.company_id, BillingCustomer.provider == BillingProvider.PAYSTACK))
+        if customer is None:
+            db.add(BillingCustomer(company_id=user.company_id, provider=BillingProvider.PAYSTACK, provider_customer_id=provider_customer_id, email=user.email))
+        else:
+            customer.provider_customer_id = provider_customer_id
+            customer.email = user.email
+
+    subscription = None
+    if provider_subscription_id:
+        subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == user.company_id, BillingSubscription.provider == BillingProvider.PAYSTACK, BillingSubscription.provider_subscription_id == provider_subscription_id))
+    if subscription is None:
+        subscription = db.scalar(select(BillingSubscription).where(BillingSubscription.company_id == user.company_id, BillingSubscription.provider == BillingProvider.PAYSTACK).order_by(BillingSubscription.created_at.desc()))
+
+    if subscription is None:
+        subscription = BillingSubscription(company_id=user.company_id, plan_id=plan.id, provider=BillingProvider.PAYSTACK, provider_subscription_id=provider_subscription_id, provider_customer_id=provider_customer_id, status=SubscriptionStatus.ACTIVE)
+        db.add(subscription)
+        db.flush()
+    else:
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.plan_id = plan.id
+        if provider_customer_id:
+            subscription.provider_customer_id = provider_customer_id
+        if provider_subscription_id:
+            subscription.provider_subscription_id = provider_subscription_id
+
+    payment_id = str(data.get("reference") or reference)
+    payment = db.scalar(select(BillingPayment).where(BillingPayment.provider == BillingProvider.PAYSTACK, BillingPayment.provider_payment_id == payment_id))
+    if payment is None:
+        db.add(BillingPayment(company_id=user.company_id, subscription_id=subscription.id, provider=BillingProvider.PAYSTACK, provider_payment_id=payment_id, amount_minor=int(data.get("amount") or 0), currency=str(data.get("currency") or "NGN").upper(), status="paid", paid_at=datetime.now(timezone.utc)))
+
+    db.commit()
+    return {"verified": True, "provider": BillingProvider.PAYSTACK, "reference": payment_id, "plan": _plan_payload(plan), "subscription_status": subscription.status}
 
 
 @router.post("/webhooks/{provider}", status_code=status.HTTP_200_OK)
