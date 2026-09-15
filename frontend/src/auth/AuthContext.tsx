@@ -8,6 +8,13 @@ type User = {
   full_name: string;
 };
 
+type BillingEntitlements = {
+  plan?: {
+    code?: string;
+    name?: string;
+  };
+};
+
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
@@ -18,7 +25,33 @@ type AuthContextValue = {
 };
 
 const TOKEN_KEY = "agata_access_token";
+const PLAN_CODE_KEY = "agata_billing_plan_code";
+const PLAN_NAME_KEY = "agata_billing_plan_name";
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function clearPlanBadge() {
+  localStorage.removeItem(PLAN_CODE_KEY);
+  localStorage.removeItem(PLAN_NAME_KEY);
+  document.body.removeAttribute("data-agata-plan-code");
+  document.body.removeAttribute("data-agata-plan-name");
+}
+
+async function syncPlanBadge() {
+  try {
+    const entitlements = await api<BillingEntitlements>("/billing/entitlements");
+    const code = entitlements.plan?.code || "foundation";
+    const name = entitlements.plan?.name || "AGATA Foundation";
+    localStorage.setItem(PLAN_CODE_KEY, code);
+    localStorage.setItem(PLAN_NAME_KEY, name);
+    document.body.dataset.agataPlanCode = code;
+    document.body.dataset.agataPlanName = name;
+  } catch {
+    const code = localStorage.getItem(PLAN_CODE_KEY) || "foundation";
+    const name = localStorage.getItem(PLAN_NAME_KEY) || "AGATA Foundation";
+    document.body.dataset.agataPlanCode = code;
+    document.body.dataset.agataPlanName = name;
+  }
+}
 
 async function loadUser(token: string) {
   setAccessToken(token);
@@ -32,29 +65,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
+      clearPlanBadge();
       setLoading(false);
       return;
     }
 
     loadUser(token)
-      .then(setUser)
+      .then(async (nextUser) => {
+        setUser(nextUser);
+        await syncPlanBadge();
+      })
       .catch(() => {
         localStorage.removeItem(TOKEN_KEY);
         setAccessToken(null);
+        clearPlanBadge();
         setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    const interval = window.setInterval(() => {
+      void syncPlanBadge();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [user]);
+
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
+      clearPlanBadge();
       setUser(null);
       return null;
     }
 
     const nextUser = await loadUser(token);
     setUser(nextUser);
+    await syncPlanBadge();
     return nextUser;
   }, []);
 
@@ -68,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       localStorage.setItem(TOKEN_KEY, result.access_token);
       setUser(await loadUser(result.access_token));
+      await syncPlanBadge();
     },
     signUp: async (companyName, fullName, email, password, acceptedTerms) => {
       const result = await api<{ message: string }>("/auth/signup", {
@@ -86,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut() {
       localStorage.removeItem(TOKEN_KEY);
       setAccessToken(null);
+      clearPlanBadge();
       setUser(null);
     },
   }), [user, loading, refreshUser]);
