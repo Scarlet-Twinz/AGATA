@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
+from uuid import uuid4
 from urllib.parse import quote
 
 import httpx
@@ -119,7 +120,8 @@ class FlutterwaveAdapter(BillingAdapter):
     async def create_checkout(self, *, email: str, plan: BillingPlan, company_id: str) -> CheckoutResult:
         if not self.settings.flutterwave_secret_key or not plan.flutterwave_plan_id:
             raise BillingProviderError("Flutterwave is not configured for this plan")
-        data = {"tx_ref": f"agata-{company_id}-{plan.code}", "amount": plan.amount_minor / 100, "currency": plan.currency, "redirect_url": f"{self.settings.frontend_url}/billing?checkout=success", "customer": {"email": email}, "payment_plan": plan.flutterwave_plan_id, "meta": {"company_id": company_id, "plan_code": plan.code}}
+        tx_ref = f"agata-{company_id}-{plan.code}-{uuid4().hex}"
+        data = {"tx_ref": tx_ref, "amount": plan.amount_minor / 100, "currency": plan.currency, "redirect_url": f"{self.settings.frontend_url}/billing?checkout=success", "customer": {"email": email}, "payment_plan": plan.flutterwave_plan_id, "meta": {"company_id": company_id, "plan_code": plan.code}}
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post("https://api.flutterwave.com/v3/payments", json=data, headers={"Authorization": f"Bearer {self.settings.flutterwave_secret_key}"})
         if response.is_error:
@@ -127,7 +129,7 @@ class FlutterwaveAdapter(BillingAdapter):
         payload = response.json(); result = payload.get("data", {})
         if payload.get("status") != "success" or not result.get("link"):
             raise BillingProviderError(payload.get("message", "Flutterwave checkout failed"))
-        return CheckoutResult(authorization_url=result["link"], provider_reference=data["tx_ref"])
+        return CheckoutResult(authorization_url=result["link"], provider_reference=tx_ref)
 
     async def verify_transaction(self, transaction_id: str) -> dict:
         if not self.settings.flutterwave_secret_key:
