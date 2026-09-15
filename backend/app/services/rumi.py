@@ -71,6 +71,29 @@ def _remove_name_question(content: str, name: str) -> str:
     return remaining
 
 
+def _is_last_chat_question(content: str) -> bool:
+    normalized = " ".join(content.lower().split())
+    return bool(
+        re.search(
+            r"\b(?:what was|what did) (?:our )?(?:last|previous|earlier) (?:chat|conversation)\b|"
+            r"\bwhat did we (?:talk about|discuss)\b|\bwhat was our last chat\b|\bwhat was our last conversation\b",
+            normalized,
+        )
+    )
+
+
+def _prior_user_message(messages: list[dict[str, str]]) -> str | None:
+    """Read the immediately previous stored user message from the exact memory context."""
+    context = next(
+        (message.get("content", "") for message in messages if message.get("role") == "system" and "RUMI CURRENT CONVERSATION" in message.get("content", "")),
+        "",
+    )
+    user_messages = re.findall(r"^- user:\s*(.+)$", context, flags=re.MULTILINE)
+    if len(user_messages) < 2:
+        return None
+    return user_messages[-2].strip()
+
+
 def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     """Give the model only the historical request and strict trace-grounding instructions."""
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
@@ -191,16 +214,27 @@ async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     model_messages = messages
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
     if _is_memory_mode(messages) and last_user is not None:
-        memory_name = _declared_name(last_user.get("content", ""))
-        if memory_name and _is_name_question(last_user.get("content", "")):
+        content = last_user.get("content", "")
+        memory_name = _declared_name(content)
+        if memory_name and _is_name_question(content):
             yield f"Your name is {memory_name}."
-            remaining = _remove_name_question(last_user.get("content", ""), memory_name)
+            remaining = _remove_name_question(content, memory_name)
             if not remaining:
                 return
+            if _is_last_chat_question(remaining):
+                previous = _prior_user_message(messages)
+                if previous:
+                    yield f'Your last Rumi chat was about: "{previous}".'
+                    return
             model_messages = [
                 ({**message, "content": remaining} if message is last_user else message)
                 for message in messages
             ]
+        elif _is_last_chat_question(content):
+            previous = _prior_user_message(messages)
+            if previous:
+                yield f'Your last Rumi chat was about: "{previous}".'
+                return
 
     try:
         async for token in _stream(model_messages, url, settings.ollama_model, timeout_seconds):
