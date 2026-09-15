@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import os
 
 from fastapi import APIRouter, HTTPException
@@ -38,15 +39,21 @@ class SupportRequest(BaseModel):
 async def submit_support_request(payload: SupportRequest):
     subject = f"[AGATA Support] {payload.topic} — {payload.name}"
     text = f"Name: {payload.name}\nEmail: {payload.email}\nTopic: {payload.topic}\n\n{payload.message}"
-    html = (
+    safe_name = html.escape(payload.name)
+    safe_email = html.escape(payload.email)
+    safe_topic = html.escape(payload.topic)
+    safe_message = html.escape(payload.message).replace("\n", "<br>")
+    safe_subject = html.escape(subject)
+    html_body = (
         f"<h2>AGATA support request</h2>"
-        f"<p><strong>Name:</strong> {payload.name}</p>"
-        f"<p><strong>Email:</strong> {payload.email}</p>"
-        f"<p><strong>Topic:</strong> {payload.topic}</p>"
-        f"<p>{payload.message.replace(chr(10), '<br>')}</p>"
+        f"<p><strong>Name:</strong> {safe_name}</p>"
+        f"<p><strong>Email:</strong> {safe_email}</p>"
+        f"<p><strong>Topic:</strong> {safe_topic}</p>"
+        f"<p>{safe_message}</p>"
+        f"<p><small>Subject: {safe_subject}</small></p>"
     )
     try:
-        await send_email(to=SUPPORT_EMAIL, subject=subject, html=html, text=text, category="support")
+        await send_email(to=SUPPORT_EMAIL, subject=subject, html=html_body, text=text, category="support")
     except EmailDeliveryError as exc:
         raise HTTPException(status_code=503, detail="AGATA could not deliver your support request right now. Please email support directly.") from exc
     return {"accepted": True, "message": "Your message has been sent to AGATA support."}
