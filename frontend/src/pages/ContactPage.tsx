@@ -8,7 +8,8 @@ export function ContactPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setSending(true);
     setSubmitted(false);
     setError("");
@@ -22,7 +23,7 @@ export function ContactPage() {
           message: String(form.get("message") || ""),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "AGATA could not send your message. Please email support directly.");
