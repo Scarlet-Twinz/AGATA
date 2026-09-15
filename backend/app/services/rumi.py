@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -34,8 +35,8 @@ def _is_historical_trace(messages: list[dict[str, str]]) -> bool:
     last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
     if not last_user:
         return False
-    content = last_user.get("content", "").lower()
-    return "historical trace" in content and "readiness decision" in content
+    content = " ".join(last_user.get("content", "").lower().split())
+    return "rumi_mode: historical_trace" in content or ("historical trace" in content and "readiness decision" in content)
 
 
 def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -50,33 +51,72 @@ def _compact_historical_messages(messages: list[dict[str, str]]) -> list[dict[st
     }
     compact_system = dict(system)
     compact_system["content"] = (
-        "You are Rumi, AGATA's compliance intelligence assistant.\n\n"
-        "HISTORICAL TRACE MODE: Answer naturally and helpfully, but treat the historical trace supplied in the user's latest message as the complete and only source of facts. "
-        "Do not use current AGATA workspace data, previous conversation turns, or general assumptions.\n\n"
+        "You are Rumi, the compliance intelligence assistant inside AGATA.\n\n"
+        "HISTORICAL TRACE MODE: Answer only from the historical trace in the latest user message.\n"
+        "The trace is an immutable record, not an invitation to infer missing facts.\n\n"
         "GROUNDING RULES:\n"
         "- Repeat or paraphrase only facts explicitly present in the supplied trace.\n"
-        "- You may explain that the deterministic engine recorded the listed requirements as blockers because the trace explicitly says they are blocking readiness.\n"
-        "- Never infer why a requirement is a blocker beyond what the deterministic explanation states.\n"
-        "- An evidence count of zero means only that zero evidence records were captured in this trace. It does NOT establish that evidence was missing, required, invalid, expired, unverified, unavailable, or insufficient.\n"
-        "- Never infer meaning from requirement or blocker names. Names such as NNNNNNNNNNNN or BB are labels only unless the trace gives them meaning.\n"
-        "- Never call a requirement critical, unmet, unsatisfied, unresolved, or failed unless the trace explicitly uses that condition.\n"
-        "- Never infer that no remediation attempt occurred merely because zero change actions were captured. Say only that zero change actions were captured.\n"
+        "- Zero evidence records means exactly zero evidence records were captured. It does not mean missing, required, invalid, expired, unverified, unavailable, or insufficient evidence.\n"
+        "- Zero change actions means exactly zero change actions were captured. It does not mean that no remediation attempt occurred.\n"
+        "- Never infer why a listed requirement is a blocker beyond the deterministic explanation supplied in the trace.\n"
+        "- Never infer meaning from requirement or blocker names.\n"
         "- Never invent evidence validity, expiry, verification, requirement details, causes, remediation history, or operational consequences.\n"
-        "- If the trace does not establish a detail, say that the trace does not establish it.\n"
-        "- Preserve the deterministic readiness result exactly. Do not override it.\n\n"
-        "STYLE: Do not sound like a hardcoded template or repeat the user's entire prompt mechanically. Give a concise, natural explanation focused on what the recorded decision means and what the decision-maker can legitimately conclude from the trace."
+        "- If a detail is not established by the trace, explicitly say that the trace does not establish it.\n"
+        "- Preserve the recorded status, score, explanation, counts, timestamp, engine, and fingerprint exactly when mentioning them.\n\n"
+        "STYLE: Give a concise, natural explanation. Do not recommend actions whose need is not established by the trace. Do not add examples of evidence, audits, documentation, standards, or remediation unless the trace itself contains them."
     )
     return [compact_system, last_user]
+
+
+def _extract_historical_answer(content: str) -> str:
+    """Build a safe natural-language explanation from an immutable trace envelope.
+
+    Historical replay is a compliance/audit surface, so deterministic grounding is more
+    important than allowing a small local model to improvise an explanation.
+    """
+    def field(pattern: str, default: str = "not established") -> str:
+        match = re.search(pattern, content, flags=re.IGNORECASE)
+        return match.group(1).strip() if match else default
+
+    captured_at = field(r"Captured at:\s*(.*?)(?=\.\s*Engine:)")
+    engine = field(r"Engine:\s*(.*?)(?=\.\s*Status:)")
+    status = field(r"Status:\s*(.*?)(?=\.\s*Score:)")
+    score = field(r"Score:\s*(.*?)(?=\.\s*Deterministic explanation:)")
+    explanation = field(r"Deterministic explanation:\s*(.*?)(?=\.\s*Requirements captured:)")
+    requirements = field(r"Requirements captured:\s*(.*?)(?=\.\s*Evidence records captured:)")
+    evidence = field(r"Evidence records captured:\s*(.*?)(?=\.\s*Blockers captured:)")
+    blockers = field(r"Blockers captured:\s*(.*?)(?=\.\s*Change actions captured:)")
+    changes = field(r"Change actions captured:\s*(.*?)(?=\.\s*Decision fingerprint:)")
+    fingerprint = field(r"Decision fingerprint:\s*(.*?)(?:\.\s*Explain why|$)")
+
+    return (
+        f"The recorded AGATA readiness decision is {status} at {score}. "
+        f"The deterministic explanation says: {explanation} "
+        f"The trace captured {requirements} requirements, {evidence} evidence records, "
+        f"{blockers} blockers, and {changes} change actions. "
+        f"The recorded blockers are {blockers}. "
+        f"The trace does not establish why those requirements are blocking readiness beyond the deterministic explanation, "
+        f"nor does it establish what the zero evidence or change-action counts mean beyond those recorded counts. "
+        f"So the decision-maker can conclude only what this trace explicitly records; additional causes or remediation details are not established here. "
+        f"Captured at {captured_at} using {engine}, fingerprint {fingerprint}."
+    )
 
 
 async def stream_rumi(messages: list[dict[str, str]]) -> AsyncIterator[str]:
     settings = get_settings()
     url = f"{settings.ollama_base_url.rstrip('/')}/api/chat"
     timeout_seconds = max(settings.ollama_timeout_seconds, 180)
-    request_messages = _compact_historical_messages(messages) if _is_historical_trace(messages) else messages
+
+    if _is_historical_trace(messages):
+        last_user = next((message for message in reversed(messages) if message.get("role") == "user"), None)
+        if last_user is not None:
+            # Historical explanations are an audit surface. Do not allow the local model
+            # to introduce unsupported causal claims even when the prompt forbids them.
+            yield _extract_historical_answer(last_user.get("content", ""))
+        return
 
     try:
-        async for token in _stream(request_messages, url, settings.ollama_model, timeout_seconds):
+        async for token in _stream(messages, url, settings.ollama_model, timeout_seconds):
             yield token
     except httpx.ReadTimeout as exc:
         raise RumiUnavailableError("Rumi is temporarily unavailable: ReadTimeout.") from exc
