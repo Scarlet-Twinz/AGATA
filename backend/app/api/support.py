@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.services.email import EmailDeliveryError, send_email
 
 router = APIRouter(prefix="/api/support", tags=["support"])
-SUPPORT_EMAIL = os.getenv("AGATA_SUPPORT_EMAIL", "anthony@anthonytech.ng")
+SUPPORT_EMAIL = os.getenv("AGATA_SUPPORT_EMAIL", "anthonyemmanuella297@gmail.com")
 
 
 class SupportRequest(BaseModel):
