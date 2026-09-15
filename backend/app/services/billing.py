@@ -43,13 +43,23 @@ class StripeAdapter(BillingAdapter):
     async def create_checkout(self, *, email: str, plan: BillingPlan, company_id: str) -> CheckoutResult:
         if not self.settings.stripe_secret_key or not plan.stripe_price_id:
             raise BillingProviderError("Stripe is not configured for this plan")
-        data = {"mode": "subscription", "customer_email": email, "line_items[0][price]": plan.stripe_price_id, "line_items[0][quantity]": "1", "success_url": f"{self.settings.frontend_url}/billing?checkout=success", "cancel_url": f"{self.settings.frontend_url}/billing?checkout=cancelled", "metadata[company_id]": company_id, "metadata[plan_code]": plan.code}
+        data = {"mode": "subscription", "customer_email": email, "line_items[0][price]": plan.stripe_price_id, "line_items[0][quantity]": "1", "success_url": f"{self.settings.frontend_url}/billing?checkout=success&session_id={{CHECKOUT_SESSION_ID}}", "cancel_url": f"{self.settings.frontend_url}/billing?checkout=cancelled", "metadata[company_id]": company_id, "metadata[plan_code]": plan.code}
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post("https://api.stripe.com/v1/checkout/sessions", data=data, auth=(self.settings.stripe_secret_key, ""))
         if response.is_error:
             raise BillingProviderError(f"Stripe checkout failed: {response.text[:300]}")
         payload = response.json()
         return CheckoutResult(authorization_url=payload["url"], provider_reference=payload.get("id"))
+
+    async def verify_checkout_session(self, session_id: str) -> dict:
+        if not self.settings.stripe_secret_key:
+            raise BillingProviderError("Stripe is not configured")
+        encoded_session_id = quote(session_id, safe="")
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(f"https://api.stripe.com/v1/checkout/sessions/{encoded_session_id}", auth=(self.settings.stripe_secret_key, ""))
+        if response.is_error:
+            raise BillingProviderError(f"Stripe verification failed: {response.text[:300]}")
+        return response.json()
 
     def verify_webhook(self, *, body: bytes, headers: dict[str, str]) -> bool:
         secret = self.settings.stripe_webhook_secret
@@ -118,6 +128,19 @@ class FlutterwaveAdapter(BillingAdapter):
         if payload.get("status") != "success" or not result.get("link"):
             raise BillingProviderError(payload.get("message", "Flutterwave checkout failed"))
         return CheckoutResult(authorization_url=result["link"], provider_reference=data["tx_ref"])
+
+    async def verify_transaction(self, transaction_id: str) -> dict:
+        if not self.settings.flutterwave_secret_key:
+            raise BillingProviderError("Flutterwave is not configured")
+        encoded_transaction_id = quote(transaction_id, safe="")
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(f"https://api.flutterwave.com/v3/transactions/{encoded_transaction_id}/verify", headers={"Authorization": f"Bearer {self.settings.flutterwave_secret_key}", "Content-Type": "application/json"})
+        if response.is_error:
+            raise BillingProviderError(f"Flutterwave verification failed: {response.text[:300]}")
+        payload = response.json()
+        if payload.get("status") != "success":
+            raise BillingProviderError(payload.get("message", "Flutterwave verification failed"))
+        return payload.get("data", {})
 
     def verify_webhook(self, *, body: bytes, headers: dict[str, str]) -> bool:
         expected, supplied = self.settings.flutterwave_webhook_secret_hash, headers.get("verif-hash", "")
