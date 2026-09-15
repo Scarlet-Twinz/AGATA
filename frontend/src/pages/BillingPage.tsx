@@ -11,14 +11,24 @@ type Summary={company?:{name:string};counts?:{projects:number;contractors:number
 type Entitlements={plan:{code:string;name:string;interval:string};limits:Record<string,number>;usage:Record<string,number>;remaining:Record<string,number>;at_limit:Record<string,boolean>};
 
 export default function BillingPage(){
- const [billing,setBilling]=useState<Billing|null>(null);const [plans,setPlans]=useState<Plan[]>([]);const [summary,setSummary]=useState<Summary|null>(null);const [entitlements,setEntitlements]=useState<Entitlements|null>(null);const [provider,setProvider]=useState("paystack");const [error,setError]=useState("");const [loading,setLoading]=useState(false);
+ const [billing,setBilling]=useState<Billing|null>(null);const [plans,setPlans]=useState<Plan[]>([]);const [summary,setSummary]=useState<Summary|null>(null);const [entitlements,setEntitlements]=useState<Entitlements|null>(null);const [provider,setProvider]=useState("paystack");const [error,setError]=useState("");const [checkoutMessage,setCheckoutMessage]=useState("");const [loading,setLoading]=useState(false);
  const load=()=>Promise.all([api<Billing>("/api/billing"),api<Plan[]>("/api/billing/plans"),api<Summary>("/api/workspace/summary"),api<Entitlements>("/api/billing/entitlements")]).then(([b,p,s,e])=>{setBilling(b);setPlans(p);setProvider(b.provider);setSummary(s);setEntitlements(e)}).catch(e=>setError(e instanceof Error?e.message:"Unable to load billing information."));
- useEffect(()=>{load()},[]);
+ useEffect(()=>{
+  const params=new URLSearchParams(window.location.search);const checkout=params.get("checkout");const reference=params.get("reference");
+  if(checkout==="success"&&reference){
+   setLoading(true);setError("");setCheckoutMessage("Verifying your Paystack payment…");
+   api<{verified:boolean;plan:{name:string};subscription_status:string}>(`/api/billing/paystack/verify/${encodeURIComponent(reference)}`)
+    .then(result=>setCheckoutMessage(`${result.plan.name} payment verified. Your subscription is now active.`))
+    .catch(e=>setError(e instanceof Error?e.message:"Unable to verify the Paystack payment."))
+    .finally(()=>{window.history.replaceState({},document.title,window.location.pathname);load().finally(()=>setLoading(false));});
+  } else {load();}
+ },[]);
  const paidPlans=plans.filter(p=>p.amount_minor>0);
- const startCheckout=async(plan:Plan)=>{setLoading(true);setError("");try{const result=await api<{authorization_url:string}>("/api/billing/checkout",{method:"POST",body:JSON.stringify({plan_code:plan.code,provider})});window.location.assign(result.authorization_url)}catch(e){setError(e instanceof Error?e.message:"Unable to start checkout.")}finally{setLoading(false)}};
+ const startCheckout=async(plan:Plan)=>{setLoading(true);setError("");setCheckoutMessage("");try{const result=await api<{authorization_url:string}>("/api/billing/checkout",{method:"POST",body:JSON.stringify({plan_code:plan.code,provider})});window.location.assign(result.authorization_url)}catch(e){setError(e instanceof Error?e.message:"Unable to start checkout.")}finally{setLoading(false)}};
  const counts=summary?.counts;const resources=(counts?.projects||0)+(counts?.contractors||0)+(counts?.requirements||0)+(counts?.evidence||0);const providerReady=paidPlans.some(p=>p.provider_ready?.[provider]);
  return <main className="billing-page"><style>{css}</style>
   <header className="hero"><div><p className="eyebrow">COMMERCIAL CONTROL</p><h1>Billing &amp; Plan</h1><p className="muted">Subscription, usage and payment administration for this AGATA workspace.</p></div><span className="badge">Billing engine ready</span></header>
+  {checkoutMessage&&<div className="panel" style={{marginTop:18}}>{checkoutMessage}</div>}
   {error&&<div className="panel" style={{marginTop:18}}>{error}</div>}
   <div className="grid"><section>
    <article className="plan"><div className="plan-top"><div><span className="pill">Current billing</span><h2>{billing?.subscriptions[0]?.plan.name||"AGATA Foundation"}</h2><p className="muted">Provider-independent subscriptions with Paystack, Stripe and Flutterwave adapters.</p></div><div className="state">{billing?.subscriptions[0]?.status||"No paid subscription"}</div></div>
