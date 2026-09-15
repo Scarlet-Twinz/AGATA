@@ -14,6 +14,7 @@ import "./dashboard-final.css";
 import "./workspace-hotfix.css";
 import "./project-detail-layout.css";
 import "./workspace-navigation-fixes.css";
+import "./workspace-billing.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
