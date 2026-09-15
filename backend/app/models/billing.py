@@ -33,6 +33,9 @@ class BillingPlan(Base):
     currency: Mapped[str] = mapped_column(String(8), default="USD")
     amount_minor: Mapped[int] = mapped_column(Integer, default=0)
     interval: Mapped[str] = mapped_column(String(20), default="monthly")
+    stripe_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    paystack_plan_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    flutterwave_plan_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
