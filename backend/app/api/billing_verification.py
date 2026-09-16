@@ -74,7 +74,9 @@ async def verify_stripe_checkout(session_id: str, db: Session = Depends(get_db),
 
     amount = int(session.get("amount_total") or 0)
     currency = str(session.get("currency") or "").upper()
-    if amount != plan.amount_minor or currency != plan.currency.upper():
+    expected_amount = plan.stripe_amount_minor if plan.stripe_amount_minor is not None else plan.amount_minor
+    expected_currency = (plan.stripe_currency or plan.currency).upper()
+    if amount != expected_amount or currency != expected_currency:
         raise HTTPException(status_code=400, detail="Stripe amount or currency does not match the selected AGATA plan")
 
     customer_id = session.get("customer")
@@ -105,9 +107,11 @@ async def verify_flutterwave_checkout(transaction_id: str, db: Session = Depends
         raise HTTPException(status_code=400, detail="Flutterwave transaction is not mapped to an active AGATA plan")
 
     amount = float(data.get("amount") or 0)
-    expected_amount = plan.amount_minor / 100
+    expected_amount_minor = plan.flutterwave_amount_minor if plan.flutterwave_amount_minor is not None else plan.amount_minor
+    expected_amount = expected_amount_minor / 100
+    expected_currency = (plan.flutterwave_currency or plan.currency).upper()
     currency = str(data.get("currency") or "").upper()
-    if amount < expected_amount or currency != plan.currency.upper():
+    if amount < expected_amount or currency != expected_currency:
         raise HTTPException(status_code=400, detail="Flutterwave amount or currency does not match the selected AGATA plan")
 
     payment_id = str(data.get("id") or transaction_id)
