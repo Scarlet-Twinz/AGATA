@@ -322,3 +322,9 @@ No open-source license has been granted. Default copyright protections apply.
 **Anthony Emmanuella Mmasinachi**
 
 Full-stack and systems engineer building software across SaaS, backend systems, distributed processing, networking, AI integration, and systems programming.
+
+## Project Links
+
+- **Repository:** https://github.com/Scarlet-Twinz/AGATA
+- **Author:** Anthony Emmanuella Mmasinachi
+- **GitHub:** https://github.com/Scarlet-Twinz
