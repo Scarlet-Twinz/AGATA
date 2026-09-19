@@ -122,8 +122,12 @@ class FlutterwaveAdapter(BillingAdapter):
             raise BillingProviderError("Flutterwave is not configured for this plan")
         if not plan.flutterwave_amount_minor or not plan.flutterwave_currency:
             raise BillingProviderError("Flutterwave pricing is not configured for this plan")
+        try:
+            payment_plan = int(plan.flutterwave_plan_id)
+        except ValueError as exc:
+            raise BillingProviderError("Flutterwave plan ID must be numeric") from exc
         tx_ref = f"agata-{company_id}-{plan.code}-{uuid4().hex}"
-        data = {"tx_ref": tx_ref, "amount": plan.flutterwave_amount_minor / 100, "currency": plan.flutterwave_currency, "redirect_url": f"{self.settings.frontend_url}/billing?checkout=success", "customer": {"email": email}, "payment_plan": int(plan.flutterwave_plan_id.rstrip('svg')) if plan.flutterwave_plan_id.rstrip('svg').isdigit() else plan.flutterwave_plan_id, "meta": {"company_id": company_id, "plan_code": plan.code}}
+        data = {"tx_ref": tx_ref, "amount": plan.flutterwave_amount_minor / 100, "currency": plan.flutterwave_currency, "redirect_url": f"{self.settings.frontend_url}/billing?checkout=success", "customer": {"email": email}, "payment_plan": payment_plan, "meta": {"company_id": company_id, "plan_code": plan.code}}
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post("https://api.flutterwave.com/v3/payments", json=data, headers={"Authorization": f"Bearer {self.settings.flutterwave_secret_key}"})
         if response.is_error:
