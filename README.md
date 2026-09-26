@@ -1,4 +1,4 @@
-#  AGATA
+# AGATA
 
 **Compliance intelligence for contractors and project teams.**
 
