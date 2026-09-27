@@ -321,6 +321,9 @@ Do not clone, copy, redistribute, rebrand, resell, publish, modify for commercia
 
 No open-source license has been granted. Default copyright protections apply.
 
+
+The repository remains a proprietary product in active development, with implementation details documented for portfolio and engineering review.
+
 ## Author
 
 **Anthony Emmanuella Mmasinachi**
