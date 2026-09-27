@@ -309,6 +309,10 @@ Future product work includes production-grade file/object storage, production bi
 
 AGATA is not presented as a finished production service yet. The repository reflects an actively developed product foundation whose architecture is being shaped around a real deployment and business workflow.
 
+## License
+
+This repository is proprietary. See [LICENSE](LICENSE). No open-source license is granted.
+
 ## Proprietary Notice
 
 AGATA is not an open-source project. The source code, product concepts, branding, documentation, interfaces, architecture, and associated assets are proprietary unless explicitly stated otherwise.
