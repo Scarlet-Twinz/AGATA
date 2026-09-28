@@ -309,29 +309,9 @@ Future product work includes production-grade file/object storage, production bi
 
 AGATA is not presented as a finished production service yet. The repository reflects an actively developed product foundation whose architecture is being shaped around a real deployment and business workflow.
 
+
 ## License
 
-This repository is proprietary. See [LICENSE](LICENSE). No open-source license is granted.
+MIT License.
 
-## Proprietary Notice
-
-AGATA is not an open-source project. The source code, product concepts, branding, documentation, interfaces, architecture, and associated assets are proprietary unless explicitly stated otherwise.
-
-Do not clone, copy, redistribute, rebrand, resell, publish, modify for commercial use, or create derivative products from this repository without explicit permission from the owner.
-
-No open-source license has been granted. Default copyright protections apply.
-
-
-The repository remains a proprietary product in active development, with implementation details documented for portfolio and engineering review.
-
-## Author
-
-**Anthony Emmanuella Mmasinachi**
-
-Full-stack and systems engineer building software across SaaS, backend systems, distributed processing, networking, AI integration, and systems programming.
-
-## Project Links
-
-- **Repository:** https://github.com/Scarlet-Twinz/AGATA
-- **Author:** Anthony Emmanuella Mmasinachi
-- **GitHub:** https://github.com/Scarlet-Twinz
+See [LICENSE](LICENSE) for the full license text.
