@@ -308,10 +308,3 @@ Future product work includes production-grade file/object storage, production bi
 **Active development · intended for deployment as a commercial product.**
 
 AGATA is not presented as a finished production service yet. The repository reflects an actively developed product foundation whose architecture is being shaped around a real deployment and business workflow.
-
-
-## License
-
-MIT License.
-
-See [LICENSE](LICENSE) for the full license text.
