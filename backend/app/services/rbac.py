@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -38,10 +38,22 @@ def ensure_workspace_access(db: Session, user: User, *, commit: bool = True) -> 
         if role is None:
             role = WorkspaceRole(company_id=user.company_id, key=key, name=name, description=description, is_system=True); db.add(role); db.flush()
         roles[key] = role
-        existing_permission_ids = set(db.scalars(select(WorkspaceRolePermission.permission_id).where(WorkspaceRolePermission.role_id == role.id)).all())
-        for permission_key in permission_keys:
-            permission = permissions_by_key[permission_key]
-            if permission.id not in existing_permission_ids: db.add(WorkspaceRolePermission(role_id=role.id, permission_id=permission.id))
+        desired_permission_ids = {permissions_by_key[key].id for key in permission_keys}
+        existing_permission_ids = set(
+            db.scalars(
+                select(WorkspaceRolePermission.permission_id).where(WorkspaceRolePermission.role_id == role.id)
+            ).all()
+        )
+        stale_permission_ids = existing_permission_ids - desired_permission_ids
+        if stale_permission_ids:
+            db.execute(
+                delete(WorkspaceRolePermission).where(
+                    WorkspaceRolePermission.role_id == role.id,
+                    WorkspaceRolePermission.permission_id.in_(stale_permission_ids),
+                )
+            )
+        for permission_id in desired_permission_ids - existing_permission_ids:
+            db.add(WorkspaceRolePermission(role_id=role.id, permission_id=permission_id))
     membership = db.scalar(select(WorkspaceMembership).where(WorkspaceMembership.company_id == user.company_id, WorkspaceMembership.user_id == user.id))
     if membership is None:
         membership = WorkspaceMembership(company_id=user.company_id, user_id=user.id, role_id=roles["owner"].id, status="active"); db.add(membership); db.flush()
