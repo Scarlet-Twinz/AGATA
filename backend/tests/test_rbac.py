@@ -9,7 +9,7 @@ from app.db.session import Base
 from app.models import entities  # noqa: F401
 from app.models import workspace  # noqa: F401
 from app.models.entities import Company, User
-from app.models.workspace import WorkspaceRole
+from app.models.workspace import WorkspacePermission, WorkspaceRole, WorkspaceRolePermission
 from app.services.rbac import ensure_workspace_access, get_membership, has_permission, membership_role
 
 
@@ -62,3 +62,31 @@ def test_suspended_membership_is_denied(db: Session) -> None:
 
     with pytest.raises(Exception, match="Workspace access is suspended"):
         get_membership(db, user)
+
+def test_system_role_permissions_are_reconciled(db: Session) -> None:
+    user = make_user(db)
+    ensure_workspace_access(db, user)
+    member_role = db.scalar(
+        select(WorkspaceRole).where(
+            WorkspaceRole.company_id == user.company_id,
+            WorkspaceRole.key == "member",
+        )
+    )
+    billing_permission = db.scalar(
+        select(WorkspacePermission).where(WorkspacePermission.key == "billing.manage")
+    )
+    assert member_role is not None
+    assert billing_permission is not None
+
+    db.add(WorkspaceRolePermission(role_id=member_role.id, permission_id=billing_permission.id))
+    db.commit()
+    assert has_permission(db, user, "billing.manage") is False
+
+    ensure_workspace_access(db, user)
+    stale = db.scalar(
+        select(WorkspaceRolePermission).where(
+            WorkspaceRolePermission.role_id == member_role.id,
+            WorkspaceRolePermission.permission_id == billing_permission.id,
+        )
+    )
+    assert stale is None
